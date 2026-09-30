@@ -1,24 +1,7 @@
 """
-PROFESSIONAL 7 AGENTS - NO FAKE SHIT - 100% REAL - READY FOR REAL MONEY INJECTION
-Capital $300 | 15 Coins x $20 = $300 Diversified | $6 MIN NOTIONAL
-Trained like hedge fund - 30 days real Binance klines 648k candles - No random fallback
-
-UPGRADE FROM YOUR $301.28 PROFIT:
-Your nice dashboard $301.28 NET +1.28 11W/4L is REAL but simple momentum.
-This upgrade adds 7 professional agents voting for 60%+ WR consistently.
-
-FOR REAL MONEY - SAFETY FIRST:
-1. Start with TESTNET: https://testnet.binance.vision (free test USDT)
-2. Set .env with API keys - NEVER commit to git
-3. Run 7 days profitable on testnet
-4. Switch USE_TESTNET=False for mainnet real $300
-5. Bot protects real money: max daily loss -15, RiskGuard blocks high vol, NO random fake prices
-
-NO FAKE GUARANTEE:
-- get_price_real() returns None on error, NEVER random.gauss
-- get_klines_real() returns None on error, NEVER random.uniform
-- If Binance fails, bot shows ERROR and WAITS, never fake price
-- All indicators real: RSI, EMA, BB, MACD, ATR, Volume
+PROFESSIONAL 7 AGENTS - TRAINING MODE - TARGET 50 CENTS WIN EVERY TRADE - ALL REAL NOTHING FAKE
+Capital $300 | 15 Coins x $20 = $300 Diversified | TARGET $0.50 WIN = $20 x 2.5% = $0.50 gross
+Trained like hedge fund - 30 days real Binance klines - No random - ALL REAL
 """
 import time, requests, datetime, json, math, os
 from collections import deque
@@ -26,9 +9,13 @@ from collections import deque
 SYMBOLS=["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","MATICUSDT","DOTUSDT","UNIUSDT","LTCUSDT","BCHUSDT","FILUSDT"]
 CAPITAL=300.0
 TRADE_SIZE=20.0
+TARGET_WIN_GROSS=0.50
+TARGET_WIN_TP_PCT=2.5
+TARGET_LOSS_SL_PCT=1.25
 MIN_NOTIONAL=6.0
 MAX_OPEN=15
 FEE_PCT=0.1
+FEE_PER_TRADE=0.04
 MAX_DAILY_LOSS=-15.0
 PRICE_API="https://data-api.binance.vision"
 KLINES_API="https://api.binance.com"
@@ -70,7 +57,6 @@ def macd(values):
     return m, m*0.9, m*0.1
 
 def get_price_real(sym):
-    """100% REAL - NO FAKE - returns None on error, NEVER random"""
     try:
         r=requests.get(f"{PRICE_API}/api/v3/ticker/price?symbol={sym}",timeout=3)
         r.raise_for_status()
@@ -80,17 +66,11 @@ def get_price_real(sym):
         return None
 
 def get_klines_real(sym, limit=100):
-    """100% REAL - NO FAKE - returns None on error, NEVER random"""
     try:
         r=requests.get(f"{KLINES_API}/api/v3/klines?symbol={sym}&interval=1m&limit={limit}",timeout=5)
         r.raise_for_status()
         data=r.json()
-        return {
-            'closes':[float(x[4]) for x in data],
-            'highs':[float(x[2]) for x in data],
-            'lows':[float(x[3]) for x in data],
-            'vols':[float(x[5]) for x in data]
-        }
+        return {'closes':[float(x[4]) for x in data],'highs':[float(x[2]) for x in data],'lows':[float(x[3]) for x in data],'vols':[float(x[5]) for x in data]}
     except Exception as e:
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] KLINES ERROR {sym}: {e} - NO FAKE - WAITING")
         return None
@@ -109,85 +89,86 @@ class ProfessionalAgent:
         vol_avg=sum(vols[-20:])/20 if len(vols)>=20 else 1.0
         vol_spike=vols[-1]/vol_avg if vol_avg>0 else 1.0
 
+        # TARGET 50 CENTS WIN EVERY TRADE - ALL AGENTS 2.5% TP 1.25% SL - $0.50 gross $0.46 net
         if self.name=="Scalper":
             if r < 22.0 and e9 and e21 and e9>e21 and vol_spike>1.2:
                 conf=min(95.0, 65.0 + (30.0-r) + (vol_spike-1.0)*10.0)
-                return ("BUY", conf, f"RSI {r:.1f} oversold + EMA9>21 + vol {vol_spike:.1f}x", "0.4", "0.2")
+                return ("BUY", conf, f"RSI {r:.1f} oversold + EMA9>21 + vol {vol_spike:.1f}x - TARGET 50c WIN $0.50 ALL REAL", "2.5", "1.25")
             if r > 78.0 and e9 and e21 and e9<e21 and vol_spike>1.2:
                 conf=min(95.0, 65.0 + (r-70.0) + (vol_spike-1.0)*10.0)
-                return ("SELL", conf, f"RSI {r:.1f} overbought + EMA9<21 + vol {vol_spike:.1f}x", "0.4", "0.2")
+                return ("SELL", conf, f"RSI {r:.1f} overbought + EMA9<21 + vol {vol_spike:.1f}x - TARGET 50c WIN $0.50 ALL REAL", "2.5", "1.25")
         elif self.name=="TrendFollower":
             if e50 and closes[-1]>e50 and macd_line>signal and 45.0<r<68.0:
                 adx=abs(e9-e21)/e21*100.0 if e9 and e21 and e21!=0 else 0.0
                 conf=min(90.0, 60.0 + adx*2.0 + (r-45.0))
-                return ("BUY", conf, f"Trend UP EMA50 {e50:.2f} MACD {macd_line:.4f}>sig RSI {r:.1f}", "1.5", "0.8")
+                return ("BUY", conf, f"Trend UP EMA50 {e50:.2f} MACD {macd_line:.4f}>sig RSI {r:.1f} - TARGET 50c WIN $0.50", "2.5", "1.25")
             if e50 and closes[-1]<e50 and macd_line<signal and 32.0<r<55.0:
                 adx=abs(e9-e21)/e21*100.0 if e9 and e21 and e21!=0 else 0.0
                 conf=min(90.0, 60.0 + adx*2.0 + (55.0-r))
-                return ("SELL", conf, f"Trend DOWN EMA50 {e50:.2f} MACD {macd_line:.4f}<sig RSI {r:.1f}", "1.5", "0.8")
+                return ("SELL", conf, f"Trend DOWN EMA50 {e50:.2f} MACD {macd_line:.4f}<sig RSI {r:.1f} - TARGET 50c WIN $0.50", "2.5", "1.25")
         elif self.name=="MeanReversion":
             if lower and closes[-1] < lower*0.999 and r < 32.0:
                 dist=(lower-closes[-1])/lower*100.0 if lower!=0 else 0.0
                 conf=min(92.0, 70.0 + dist*10.0 + (32.0-r))
-                return ("BUY", conf, f"BB lower {lower:.2f} price {closes[-1]:.2f} {dist:.2f}% below + RSI {r:.1f}", "0.8", "0.6")
+                return ("BUY", conf, f"BB lower {lower:.2f} price {closes[-1]:.2f} {dist:.2f}% below + RSI {r:.1f} - TARGET 50c WIN", "2.5", "1.25")
             if upper and closes[-1] > upper*1.001 and r > 68.0:
                 dist=(closes[-1]-upper)/upper*100.0 if upper!=0 else 0.0
                 conf=min(92.0, 70.0 + dist*10.0 + (r-68.0))
-                return ("SELL", conf, f"BB upper {upper:.2f} price {closes[-1]:.2f} {dist:.2f}% above + RSI {r:.1f}", "0.8", "0.6")
+                return ("SELL", conf, f"BB upper {upper:.2f} price {closes[-1]:.2f} {dist:.2f}% above + RSI {r:.1f} - TARGET 50c WIN", "2.5", "1.25")
         elif self.name=="Breakout":
             if len(highs)>=20 and len(lows)>=20:
                 donchian_high=max(highs[-20:]); donchian_low=min(lows[-20:])
                 if closes[-1] > donchian_high*0.9995 and vol_spike > 1.5 and r>55.0:
                     conf=min(94.0, 65.0 + (vol_spike-1.0)*15.0 + (r-50.0)*0.5)
-                    return ("BUY", conf, f"Breakout HIGH {donchian_high:.2f} vol {vol_spike:.1f}x RSI {r:.1f}", "2.0", "1.0")
+                    return ("BUY", conf, f"Breakout HIGH {donchian_high:.2f} vol {vol_spike:.1f}x RSI {r:.1f} - TARGET 50c WIN $0.50", "2.5", "1.25")
                 if closes[-1] < donchian_low*1.0005 and vol_spike > 1.5 and r<45.0:
                     conf=min(94.0, 65.0 + (vol_spike-1.0)*15.0 + (50.0-r)*0.5)
-                    return ("SELL", conf, f"Breakdown LOW {donchian_low:.2f} vol {vol_spike:.1f}x RSI {r:.1f}", "2.0", "1.0")
+                    return ("SELL", conf, f"Breakdown LOW {donchian_low:.2f} vol {vol_spike:.1f}x RSI {r:.1f} - TARGET 50c WIN $0.50", "2.5", "1.25")
         elif self.name=="OrderFlow":
             bullish=sum(1 for i in range(-10,0) if closes[i] > closes[i-1]) if len(closes)>=10 else 5
             if bullish >= 7 and r<65.0 and vol_spike>1.3:
                 conf=min(88.0, 55.0 + bullish*3.0 + (vol_spike-1.0)*10.0)
-                return ("BUY", conf, f"Order flow bullish {bullish}/10 vol {vol_spike:.1f}x", "1.0", "0.6")
+                return ("BUY", conf, f"Order flow bullish {bullish}/10 vol {vol_spike:.1f}x - TARGET 50c WIN $0.50", "2.5", "1.25")
             if bullish <= 3 and r>35.0 and vol_spike>1.3:
                 conf=min(88.0, 55.0 + (10-bullish)*3.0 + (vol_spike-1.0)*10.0)
-                return ("SELL", conf, f"Order flow bearish {bullish}/10 vol {vol_spike:.1f}x", "1.0", "0.6")
+                return ("SELL", conf, f"Order flow bearish {bullish}/10 vol {vol_spike:.1f}x - TARGET 50c WIN $0.50", "2.5", "1.25")
         elif self.name=="StatArb":
             if len(closes)>=20:
                 btc_change=(closes[-1]-closes[-20])/closes[-20]*100.0 if closes[-20]!=0 else 0.0
                 if abs(btc_change) > 1.5 and abs(r-50.0) > 15.0:
                     if btc_change>0 and r<40.0:
                         conf=min(85.0, 60.0 + abs(btc_change)*5.0 + (50.0-r)*0.5)
-                        return ("BUY", conf, f"Stat arb lag BTC {btc_change:+.2f}% RSI {r:.1f} oversold", "1.2", "0.7")
+                        return ("BUY", conf, f"Stat arb lag BTC {btc_change:+.2f}% RSI {r:.1f} oversold - TARGET 50c WIN", "2.5", "1.25")
                     if btc_change<0 and r>60.0:
                         conf=min(85.0, 60.0 + abs(btc_change)*5.0 + (r-50.0)*0.5)
-                        return ("SELL", conf, f"Stat arb lag BTC {btc_change:+.2f}% RSI {r:.1f} overbought", "1.2", "0.7")
+                        return ("SELL", conf, f"Stat arb lag BTC {btc_change:+.2f}% RSI {r:.1f} overbought - TARGET 50c WIN", "2.5", "1.25")
         elif self.name=="RiskGuard":
             if len(closes)>=15:
                 atr_pct=atr_val/closes[-1]*100.0 if closes and closes[-1]!=0 else 0.0
                 if atr_pct > 2.5:
-                    return ("BLOCK", 95.0, f"ATR too high {atr_pct:.2f}% >2.5% - high volatility", "0", "0")
+                    return ("BLOCK", 95.0, f"ATR too high {atr_pct:.2f}% >2.5% - high volatility - SKIP - PROTECT 50c TARGET", "0", "0")
                 if vol_spike > 4.0:
-                    return ("BLOCK", 90.0, f"Vol spike extreme {vol_spike:.1f}x - manipulation", "0", "0")
+                    return ("BLOCK", 90.0, f"Vol spike extreme {vol_spike:.1f}x - manipulation - SKIP", "0", "0")
                 if r < 8.0 or r > 92.0:
-                    return ("BLOCK", 88.0, f"RSI extreme {r:.1f} - wait normalization", "0", "0")
-            return ("APPROVE", 70.0, f"Risk OK ATR {atr_val/closes[-1]*100.0 if closes and closes[-1]!=0 else 0:.2f}% vol {vol_spike:.1f}x RSI {r:.1f}", "0", "0")
+                    return ("BLOCK", 88.0, f"RSI extreme {r:.1f} - wait normalization - SKIP", "0", "0")
+            return ("APPROVE", 70.0, f"Risk OK ATR {atr_val/closes[-1]*100.0 if closes and closes[-1]!=0 else 0:.2f}% vol {vol_spike:.1f}x RSI {r:.1f} - TARGET 50c WIN READY", "0", "0")
         return None
 
 agents=[
-    ProfessionalAgent("Scalper","0.3% scalp RSI+EMA+Vol - TP 0.4% SL 0.2%"),
-    ProfessionalAgent("TrendFollower","EMA50/200 + MACD - TP 1.5% SL 0.8%"),
-    ProfessionalAgent("MeanReversion","Bollinger 20x2 + RSI 30/70 - TP 0.8% SL 0.6% - 60% WR"),
-    ProfessionalAgent("Breakout","Donchian 20 + Vol 1.5x + ATR - TP 2% SL 1%"),
-    ProfessionalAgent("OrderFlow","Taker volume + bullish 7/10 - TP 1.0% SL 0.6%"),
-    ProfessionalAgent("StatArb","BTC correlation + z-score >2 - TP 1.2% SL 0.7%"),
-    ProfessionalAgent("RiskGuard","ATR<2.5% + Vol<4x + RSI 8-92 - blocks risky"),
+    ProfessionalAgent("Scalper","TARGET 50c WIN - RSI+EMA+Vol - TP 2.5% SL 1.25% - $0.50 gross $0.46 net"),
+    ProfessionalAgent("TrendFollower","TARGET 50c WIN - EMA50/200 + MACD - TP 2.5% SL 1.25%"),
+    ProfessionalAgent("MeanReversion","TARGET 50c WIN - Bollinger + RSI - TP 2.5% SL 1.25% - 60% WR target"),
+    ProfessionalAgent("Breakout","TARGET 50c WIN - Donchian + Vol - TP 2.5% SL 1.25%"),
+    ProfessionalAgent("OrderFlow","TARGET 50c WIN - Taker volume - TP 2.5% SL 1.25%"),
+    ProfessionalAgent("StatArb","TARGET 50c WIN - BTC correlation - TP 2.5% SL 1.25%"),
+    ProfessionalAgent("RiskGuard","TARGET 50c WIN - Protects - blocks risky - ATR<2.5% + Vol<4x + RSI 8-92"),
 ]
 
-print(f"=== PROFESSIONAL 7 AGENTS - NO FAKE SHIT - 100% REAL - $300 15 COINS - READY FOR REAL MONEY ===")
-print(f"Your nice dashboard $301.28 11W/4L is REAL but simple - this is 7 agents professional upgrade")
-print(f"Capital ${CAPITAL} | {len(SYMBOLS)} coins x ${TRADE_SIZE} = ${CAPITAL} | MAX_OPEN {MAX_OPEN} | MIN_NOTIONAL ${MIN_NOTIONAL}")
-print(f"NO FAKE: Binance API only, no random.gauss, no random.uniform, real indicators only")
-print(f"SAFETY: $300 fixes insufficient balance, $6 fixes NOTIONAL FAIL, RiskGuard, max daily loss {MAX_DAILY_LOSS}")
+print(f"=== PROFESSIONAL 7 AGENTS - TRAINING MODE - TARGET 50 CENTS WIN EVERY TRADE - ALL REAL ===")
+print(f"Capital ${CAPITAL} | {len(SYMBOLS)} coins x ${TRADE_SIZE} = ${CAPITAL} | TARGET ${TARGET_WIN_GROSS} WIN = {TARGET_WIN_TP_PCT}% TP")
+print(f"TP {TARGET_WIN_TP_PCT}% = ${TRADE_SIZE*TARGET_WIN_TP_PCT/100:.2f} gross - ${FEE_PER_TRADE:.2f} fee = ${TRADE_SIZE*TARGET_WIN_TP_PCT/100-FEE_PER_TRADE:.2f} net - TARGET 50c")
+print(f"SL {TARGET_LOSS_SL_PCT}% = ${TRADE_SIZE*TARGET_LOSS_SL_PCT/100:.2f} gross loss - Risk:Reward 2:1 - Need 40% WR to break even")
+print(f"TRAINING MODE - ALL REAL NOTHING FAKE - Until real funds injection")
 
 kcache={}
 for s in SYMBOLS:
@@ -206,13 +187,13 @@ try:
     with open("trading_state.json","r") as f:
         state=json.load(f)
         daily_pnl=state.get("daily_pnl",0.0)
-        print(f"Loaded state: capital ${state.get('capital',CAPITAL)} daily {daily_pnl:+.2f}")
+        print(f"Loaded state: capital ${state.get('capital',CAPITAL)} daily {daily_pnl:+.2f} - TARGET 50c WIN")
 except:
     pass
 
 while True:
     if daily_pnl <= MAX_DAILY_LOSS:
-        print(f"DAILY LOSS LIMIT {daily_pnl:.2f} <= {MAX_DAILY_LOSS} - STOPPING - PROTECTING REAL MONEY")
+        print(f"DAILY LOSS LIMIT {daily_pnl:.2f} <= {MAX_DAILY_LOSS} - STOPPING - PROTECTING REAL MONEY - TRAINING MODE")
         time.sleep(3600)
         continue
 
@@ -237,7 +218,7 @@ while True:
                 if ag.name==tr['agent']:
                     ag.trades+=1; ag.pnl+=net
                     if net>0: ag.wins+=1
-            log=f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {tr['sym']} {result} HIT {pct:+.2f}% Agent {tr['agent']} {tr['reason']} NET {net:+.2f} DAILY {daily_pnl:+.2f} WR {wins/(wins+losses)*100.0 if wins+losses>0 else 0:.1f}% REAL NO FAKE"
+            log=f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {tr['sym']} {result} HIT {pct:+.2f}% Agent {tr['agent']} {tr['reason']} NET {net:+.2f} TARGET 50c WIN - DAILY {daily_pnl:+.2f} WR {wins/(wins+losses)*100.0 if wins+losses>0 else 0:.1f}% REAL NO FAKE - TRAINING MODE"
             print(log)
             with open("trading.log","a") as f: f.write(log+"\n")
             open_trades.remove(tr)
@@ -282,7 +263,7 @@ while True:
                 order={'orderId': int(time.time()*1000),'symbol':sym,'side':'BUY','price':cur,'agent':lead[0],'conf':avg_conf,'votes':len(buys),'tp':float(lead[4]),'sl':float(lead[5]),'reason':lead[3],'time':datetime.datetime.now().strftime('%H:%M:%S')}
                 trading_state["orders"].append(order)
                 trading_state["orders"]=trading_state["orders"][-100:]
-                log=f"[{datetime.datetime.now().strftime('%H:%M:%S')}] OPEN {sym} LONG ${cur:.4f} Lead {lead[0]} CONF {avg_conf:.0f}% Votes {len(buys)}/6 TP {lead[4]}% SL {lead[5]}% Free ${free:.2f} DAILY {daily_pnl:+.2f} | {lead[3]}"
+                log=f"[{datetime.datetime.now().strftime('%H:%M:%S')}] OPEN {sym} LONG ${cur:.4f} Lead {lead[0]} CONF {avg_conf:.0f}% Votes {len(buys)}/6 TP {lead[4]}%=${TRADE_SIZE*float(lead[4])/100:.2f} SL {lead[5]}% Free ${free:.2f} DAILY {daily_pnl:+.2f} TARGET 50c WIN | {lead[3]}"
                 print(log)
                 with open("trading.log","a") as f: f.write(log+"\n")
                 with open("trading_state.json","w") as f: json.dump(trading_state,f,indent=2)
@@ -295,7 +276,7 @@ while True:
                 order={'orderId': int(time.time()*1000),'symbol':sym,'side':'SELL','price':cur,'agent':lead[0],'conf':avg_conf,'votes':len(sells),'tp':float(lead[4]),'sl':float(lead[5]),'reason':lead[3],'time':datetime.datetime.now().strftime('%H:%M:%S')}
                 trading_state["orders"].append(order)
                 trading_state["orders"]=trading_state["orders"][-100:]
-                log=f"[{datetime.datetime.now().strftime('%H:%M:%S')}] OPEN {sym} SHORT ${cur:.4f} Lead {lead[0]} CONF {avg_conf:.0f}% Votes {len(sells)}/6 TP {lead[4]}% SL {lead[5]}% Free ${free:.2f} DAILY {daily_pnl:+.2f} | {lead[3]}"
+                log=f"[{datetime.datetime.now().strftime('%H:%M:%S')}] OPEN {sym} SHORT ${cur:.4f} Lead {lead[0]} CONF {avg_conf:.0f}% Votes {len(sells)}/6 TP {lead[4]}%=${TRADE_SIZE*float(lead[4])/100:.2f} SL {lead[5]}% Free ${free:.2f} DAILY {daily_pnl:+.2f} TARGET 50c WIN | {lead[3]}"
                 print(log)
                 with open("trading.log","a") as f: f.write(log+"\n")
                 with open("trading_state.json","w") as f: json.dump(trading_state,f,indent=2)
