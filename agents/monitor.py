@@ -1,12 +1,28 @@
-import asyncio, time
-last=time.time()
-async def run():
-    global last
-    print("Monitor: VPS 24/7 BACKGROUND WORKED 12m 34s 32 closes +$0.96")
-    while True:
-        now=time.time()
-        elapsed=now-last
-        if elapsed>60:
-            print(f"BACKGROUND {int(elapsed//60)}m {int(elapsed%60)}s while away")
-        last=now
-        await asyncio.sleep(10)
+
+"""
+PROFESSIONAL - monitor.py - Monitoring for dashboard - real metrics
+"""
+import datetime
+
+class Monitor:
+    def __init__(self):
+        self.logs=[]
+        self.agent_stats={}
+
+    def log(self, msg):
+        entry=f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}"
+        self.logs.append(entry)
+        if len(self.logs)>200:
+            self.logs.pop(0)
+        print(entry)
+        return entry
+
+    def get_agent_report(self, signal_gen, accounting, risk_manager):
+        report=[]
+        for name, stats in signal_gen.agents.items():
+            total=stats['trades']
+            wr=stats['wins']/total*100 if total>0 else 0
+            report.append(f"{name}: {stats['trades']} trades {stats['wins']}W {wr:.1f}% PnL ${stats['pnl']:.2f}")
+        report.append(f"RiskGuard: Blocked {risk_manager.blocked} Approved {risk_manager.approved}")
+        report.append(f"Accounting: Capital ${accounting.capital:.2f} Daily {accounting.daily_pnl:+.2f} WR {accounting.get_stats()['wr']:.1f}%")
+        return report
