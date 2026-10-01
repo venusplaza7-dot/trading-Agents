@@ -1,25 +1,25 @@
 import time, json, random, math, os
 from datetime import datetime
 import requests
-import os
 from dotenv import load_dotenv
-load_dotenv()
 
-PRICE_API = os.getenv("PRICE_API", "https://data-api.binance.vision")
-KLINES_API = os.getenv("KLINES_API", "https://api.binance.com")
-USE_TESTNET = os.getenv("USE_TESTNET", "True") == "True"
-load_dotenv()
+# --- .env PICKUP FIX ---
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
-PRICE_API = os.getenv("PRICE_API", "https://data-api.binance.vision")
-KLINES_API = os.getenv("KLINES_API", "https://api.binance.com")
-USE_TESTNET = os.getenv("USE_TESTNET", "True") == "True"
+PRICE_API = os.getenv("PRICE_API") or "https://data-api.binance.vision"
+KLINES_API = os.getenv("KLINES_API") or "https://api.binance.com"
+USE_TESTNET = (os.getenv("USE_TESTNET") or "True").lower() == "true"
+CAPITAL_START = float(os.getenv("CAPITAL") or 300.0)
 
-PRICE_API = "https://data-api.binance.vision"
-KLINES_API = "https://api.binance.com"
-USE_TESTNET = True
+# --- DASHBOARD LINK AUTO-GENERATE ---
+codespace = os.getenv("CODESPACE_NAME")
+domain = os.getenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN", "app.github.dev")
+if codespace:
+    DASH_LINK = f"https://{codespace}-8000.{domain}/dashboard-24-7.html?v=10"
+else:
+    DASH_LINK = "http://localhost:8000/dashboard-24-7.html?v=10"
 
 COINS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","MATICUSDT","DOTUSDT","UNIUSDT","LTCUSDT","BCHUSDT","FILUSDT"]
-CAPITAL_START = 300.0
 PER_COIN = 20.0
 TP_PCT = 0.025
 SL_PCT = 0.0125
@@ -48,8 +48,14 @@ def get_price_real(symbol):
         r.raise_for_status()
         return float(r.json()["price"])
     except Exception as e:
-        log(f"ERROR PRICE_API {symbol}: {e} — NO FAKE FALLBACK")
-        return None
+        # fallback to KLINES_API if vision blocked
+        try:
+            r = requests.get(f"{KLINES_API}/api/v3/ticker/price?symbol={symbol}", timeout=5)
+            r.raise_for_status()
+            return float(r.json()["price"])
+        except:
+            log(f"ERROR PRICE {symbol}: {e} — NO FAKE")
+            return None
 
 def get_klines_real(symbol, limit=500):
     try:
@@ -58,7 +64,7 @@ def get_klines_real(symbol, limit=500):
         data = r.json()
         return [float(k[4]) for k in data], [float(k[5]) for k in data]
     except Exception as e:
-        log(f"ERROR KLINES_API {symbol}: {e} — NO FAKE FALLBACK")
+        log(f"ERROR KLINES {symbol}: {e} — NO FAKE")
         return None, None
 
 def calc_rsi(closes, period=14):
@@ -131,7 +137,11 @@ def load_state():
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE) as f:
-                return json.load(f)
+                d=json.load(f)
+                # fix old $300.0000 bug
+                if d.get("capital")==300.0 and d.get("trades")==0:
+                    return {"capital":CAPITAL_START,"wins":0,"losses":0,"trades":0,"daily_pnl":0.0,"order_id":12596}
+                return d
         except: pass
     return {"capital":CAPITAL_START,"wins":0,"losses":0,"trades":0,"daily_pnl":0.0,"order_id":12596}
 
@@ -139,11 +149,17 @@ def save_state(s):
     with open(STATE_FILE,"w") as f: json.dump(s,f,indent=2)
 
 def main():
-    print("="*60)
+    print("="*70)
+    print(f"PRICE_API={PRICE_API}")
+    print(f"KLINES_API={KLINES_API}")
+    print(f"USE_TESTNET={USE_TESTNET}")
+    print(f"CAPITAL_START=${CAPITAL_START}")
+    print(f"DASHBOARD LINK: {DASH_LINK}")
+    print("="*70)
     print("TRAINING MODE - ALL REAL NOTHING FAKE - Until real funds injection")
     print(f"Black Gold v10 PRO ACTIVE — ${CAPITAL_START} = 15x${PER_COIN} — TARGET ${TARGET_GROSS} WIN")
     print(f"Filters: RSI {RSI_LOW}/{RSI_HIGH} + Vol {VOL_MULT}x + {MIN_VOTES} votes + CONF {CONF_THRESH}% + {KLINES_LIMIT} klines + every {HEARTBEAT}s heartbeat")
-    print("="*60)
+    print("="*70)
     state=load_state()
     oid=state.get("order_id",12596)
     while True:
@@ -176,7 +192,7 @@ def main():
                 log(f"CAPITAL ${state['capital']:.4f} Start ${CAPITAL_START} + Gross ${gross:.2f} - Fees ${fees:.4f} = +${net:.2f} net {best_coin} Order #{oid} {datetime.now().strftime('%H:%M:%S')} {side} FILLED")
                 log(f"P&L +${state['daily_pnl']:.2f} Gross +{gross:.4f} Fees {fees:.4f} Win +{net:.2f} Loss -0.29 RR 2:1 | {best_sig} {best_score} votes CONF {conf_f:.0f}% | {best_reason}")
             with open("dashboard_data.json","w") as f:
-                json.dump({"capital":state["capital"],"wins":state["wins"],"losses":state["losses"],"trades":state["trades"],"daily":state["daily_pnl"],"last_coin":best_coin or "SCANNING","last_signal":best_sig or "WAIT","time":datetime.now().isoformat()},f)
+                json.dump({"capital":state["capital"],"wins":state["wins"],"losses":state["losses"],"trades":state["trades"],"daily":state["daily_pnl"],"last_coin":best_coin or "SCANNING","last_signal":best_sig or "WAIT","time":datetime.now().isoformat(),"dashboard":DASH_LINK},f)
             time.sleep(HEARTBEAT)
         except KeyboardInterrupt:
             log("Stopped"); break
@@ -184,11 +200,4 @@ def main():
             log(f"LOOP ERROR: {e}"); time.sleep(HEARTBEAT)
 
 if __name__=="__main__":
-    if os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE) as f: d=json.load(f)
-            if d.get("capital",0)==300.0 and d.get("trades",0)==0:
-                os.remove(STATE_FILE)
-                if os.path.exists(LOG_FILE): os.remove(LOG_FILE)
-        except: pass
     main()
