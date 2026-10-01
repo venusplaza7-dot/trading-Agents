@@ -1,6 +1,18 @@
 import time, json, random, math, os
 from datetime import datetime
 import requests
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+PRICE_API = os.getenv("PRICE_API", "https://data-api.binance.vision")
+KLINES_API = os.getenv("KLINES_API", "https://api.binance.com")
+USE_TESTNET = os.getenv("USE_TESTNET", "True") == "True"
+load_dotenv()
+
+PRICE_API = os.getenv("PRICE_API", "https://data-api.binance.vision")
+KLINES_API = os.getenv("KLINES_API", "https://api.binance.com")
+USE_TESTNET = os.getenv("USE_TESTNET", "True") == "True"
 
 PRICE_API = "https://data-api.binance.vision"
 KLINES_API = "https://api.binance.com"
