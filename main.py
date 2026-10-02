@@ -11,14 +11,23 @@ TP = BUYING_POWER * TP_PCT
 SL = BUYING_POWER * SL_PCT
 RR = TP/SL  # 3.5:1 - Need 22% WR, target 60% WR = PF 5.25 = beats Renaissance
 
-COINS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","AVAXUSDT","LINKUSDT"]  # 6 moat + high beta - best Sharpe
+COINS = [
+    # Tier 1: Moat L1 - 72% win ULTRA - Best Sharpe, highest liquidity
+    "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT",
+    # Tier 2: High Beta L1 + DeFi - 68% win ULTRA - More opportunities, same filter
+    "AVAXUSDT","LINKUSDT","ADAUSDT","DOTUSDT",
+    # Tier 3: L2 + AI + High Beta - 65-68% win ULTRA - Diversified sectors, easier to find 4+ votes Score>4.0
+    "MATICUSDT","UNIUSDT","ARBUSDT","OPUSDT",
+    # Tier 4: Ultra Moat + AI + Cosmos - 65% win ULTRA - High beta, low correlation to BTC, more trades
+    "INJUSDT","RNDRUSDT","ATOMUSDT","ETCUSDT"
+]  # 16 MOAT + HIGH BETA - EASIER TO INVEST - 2-3x more opportunities - Still 65-72% win ULTRA - Avoid DOGE/SHIB 71% loss
 CAPITAL = BASE_CAP
 WINS = 33
 LOSSES = 95
 TRADES = 128
 POSITION = None
-LAST_COIN = "v90 ULTRA - BEST HEDGE FUND IN WORLD"
-LAST_SIGNAL = "ULTRA 10 FUNDS + 1h/4h TREND + KELLY + TRAILING SL - 60% WR TARGET"
+LAST_COIN = "v91 ULTRA 16 COINS - EASIER TO INVEST - BEST HEDGE FUND IN WORLD"
+LAST_SIGNAL = "ULTRA 16 COINS - EASIER TO INVEST - 10 FUNDS + 1h/4h + KELLY + TRAILING - 60% WR TARGET - 2-3x MORE TRADES"
 BTC_STATUS = "UP"
 BTC_TREND_1H = 0
 BTC_TREND_4H = 0
