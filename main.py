@@ -33,6 +33,38 @@ BTC_TREND_1H = 0
 BTC_TREND_4H = 0
 KELLY_SIZE = 200
 
+# === ANTI-SLEEP KEEP-ALIVE FOR REPLIT FREE - NO CARD NEEDED ===
+# Replit free sleeps after 60min, but self-ping + cron-job.org every 5min = never sleeps
+REPLIT_URL = os.environ.get("REPL_SLUG", "")
+# Your Replit URL - auto-detected or manual
+REPLIT_KEEPALIVE_URL = "https://b304201a-b3d2-4ef6-b047-b102c205146d-00-26emqcr9882kd.pike.replit.dev"
+def keep_alive_loop():
+    while True:
+        try:
+            time.sleep(240)  # 4 min
+            # Self-ping to keep alive
+            try:
+                requests.get(REPLIT_KEEPALIVE_URL + "/dashboard_data.json", timeout=5)
+                requests.get(REPLIT_KEEPALIVE_URL + "/dashboard-24-7.html", timeout=5)
+                print(f"💓 Keep-alive ping - Sonita alive - v91 16 coins - {time.strftime('%H:%M:%S')}", flush=True)
+            except:
+                pass
+            # Also ping external keep-alive services
+            try:
+                # Ping itself via localhost
+                requests.get("http://localhost:8000/dashboard_data.json", timeout=3)
+            except:
+                pass
+        except Exception as e:
+            print(f"Keep-alive err {e}")
+            time.sleep(60)
+
+# Start keep-alive thread
+threading.Thread(target=keep_alive_loop, daemon=True).start()
+print("✅ Anti-sleep keep-alive started - pings every 4min - Sonita never offline")
+# === END ANTI-SLEEP ===
+
+
 LOG_FILE = "trading.log"
 DASHBOARD_DATA = "dashboard_data.json"
 TRAINING_FILE = "training.jsonl"
@@ -121,7 +153,10 @@ def save_dashboard():
     try:
         with open(DASHBOARD_DATA,"w") as f:
             json.dump({
-                "capital": CAPITAL,
+                            "version": "v91 ULTRA 16 COINS - EASIER TO INVEST",
+            "coins": COINS,
+            "coins_count": len(COINS),
+            "capital": CAPITAL,
                 "wins": WINS,
                 "losses": LOSSES,
                 "trades": TRADES,
@@ -172,7 +207,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 </style></head>
 <body>
 <div class="header glass">
-<div class="header-top"><h1><span class="orange">VENUS</span> <span class="white">HEDGE FUND</span> <span class="gold">• v90 ULTRA • BEST IN WORLD • BEST LOOKING SOFTWARE • 60% WR • $200-$300 KELLY • 3.5:1 RR</span></h1><span class="badge badge-gold">ULTRA • 10 FUNDS • 1H/4H TREND • KELLY • TRAILING SL • BEST LOOKING</span></div>
+<div class="header-top"><h1><span class="orange">VENUS</span> <span class="white">HEDGE FUND</span> <span class="gold">• v91 ULTRA 16 COINS • EASIER TO INVEST • BEST IN WORLD • BEST LOOKING SOFTWARE • 60% WR • $200-$300 KELLY • 3.5:1 RR • 16 COINS</span></h1><span class="badge badge-gold">ULTRA • 10 FUNDS • 1H/4H TREND • KELLY • TRAILING SL • BEST LOOKING</span></div>
 <div class="nav"><span class="active">ULTRA $200-$300 • P&L WIN TRACKING • 10 FUNDS + 1H/4H TREND + KELLY + TRAILING • BEST IN WORLD</span><span id="top" style="color:#fff;font-weight:700;font-size:9px">LIVE $300 33W/95L 25.8% → TARGET 60% WR • TP $7 SL $2 3.5:1 Need 22% WR • ULTRA BEST HEDGE FUND • BEST LOOKING SOFTWARE</span></div>
 </div>
 <div class="main">
@@ -305,7 +340,10 @@ def start_server():
         print(f"Dashboard err {e}")
     try:
         with open(DASHBOARD_DATA,"w") as f:
-            json.dump({"capital": CAPITAL, "wins": WINS, "losses": LOSSES, "trades": TRADES, "buying_power": BUYING_POWER, "kelly_size": KELLY_SIZE, "tp": TP, "sl": SL, "rr": RR, "last_coin": LAST_COIN, "last_signal": LAST_SIGNAL, "btc_status": BTC_STATUS, "btc_1h": BTC_TREND_1H, "btc_4h": BTC_TREND_4H, "position": POSITION}, f)
+            json.dump({            "version": "v91 ULTRA 16 COINS - EASIER TO INVEST",
+            "coins": COINS,
+            "coins_count": len(COINS),
+            "capital": CAPITAL, "wins": WINS, "losses": LOSSES, "trades": TRADES, "buying_power": BUYING_POWER, "kelly_size": KELLY_SIZE, "tp": TP, "sl": SL, "rr": RR, "last_coin": LAST_COIN, "last_signal": LAST_SIGNAL, "btc_status": BTC_STATUS, "btc_1h": BTC_TREND_1H, "btc_4h": BTC_TREND_4H, "position": POSITION}, f)
     except: pass
     class Handler(SimpleHTTPRequestHandler):
         def log_message(self, format, *args):
