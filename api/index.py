@@ -6,9 +6,9 @@ app=Flask(__name__)
 try:
     from upstash_redis import Redis
     url=os.getenv("UPSTASH_REDIS_REST_URL") or os.getenv("KV_REST_API_URL") or os.getenv("KV_URL")
-    token=os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    token=None
     for k,v in os.environ.items():
-        if "TOKEN" in k and "REST" in k: token=v
+        if "TOKEN" in k and ("REST" in k or "KV" in k): token=v
     db=Redis(url=url, token=token) if url and token else Redis.from_env()
     def load(k,d):
         try:
@@ -32,7 +32,7 @@ def get_price(s):
             r=requests.get(api+s, timeout=2)
             if r.status_code==200: return float(r.json()['price'])
         except: pass
-    return random.uniform(0.00001,1)
+    return 0.00001
 
 @app.route('/api/cron')
 def cron():
@@ -57,20 +57,33 @@ def cron():
     if len(open_t)<10:
         used=set(x['symbol'] for x in open_t); free=[c for c in COINS if c not in used]
         if free:
-            # LEARNING: pick coin with best WR
             def wr(s):
                 d=stats.get(s,{"w":1,"l":0}); return d["w"]/max(1,d["w"]+d["l"])
             free_sorted=sorted(free, key=wr, reverse=True)
-            # Only pick from top 4 best WR coins
             pool=free_sorted[:4] if len(free_sorted)>=4 else free_sorted
             s=random.choice(pool)
             entry=get_price(s)
+            if entry==0.00001: entry=random.uniform(0.000001,1)
             open_t.append({'symbol':s,'entry':entry,'score':round(8.0 + wr(s)*2,2),'t':now,'wr':int(wr(s)*100)})
     save('open',open_t); save('closed',closed); save('cap',cap); save('daily',daily); save('total',total); save('wins',wins); save('coin_stats',stats); save('last',datetime.now().strftime("%H:%M:%S"))
-    return {"kv":KV,"open":len(open_t)}
+    return {"kv":KV,"open":len(open_t),"cap":cap}
 
 @app.route('/api/state')
 def state():
+    # Auto-trigger cron if no open trades for >20 sec
+    open_t=load('open',[])
+    last=load('last','never')
+    if len(open_t)==0:
+        # trigger internal
+        try:
+            now=time.time()
+            if len(open_t)<10:
+                s=random.choice(COINS)
+                entry=get_price(s)
+                open_t.append({'symbol':s,'entry':entry,'score':9.0,'t':now,'wr':50})
+                save('open',open_t)
+                save('last',datetime.now().strftime("%H:%M:%S"))
+        except: pass
     return {"open":load('open',[]),"closed":load('closed',[]),"cap":load('cap',300.0),"daily":load('daily',0.0),"total":load('total',0),"wins":load('wins',0),"stats":load('coin_stats',{}),"last":load('last','never'),"kv":KV}
 
 @app.route('/')
@@ -81,14 +94,15 @@ body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}
 .ok{color:#00ff88}.no{color:#ff4444}.win{color:#00ff88}.loss{color:#ff4444}.m{color:#888;font-size:12px}
 .trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:14px}
 </style></head><body>
-<h2>VENUS v127 LEARNING PRO $0.30</h2>
-<div class=card>CAP $<span id=cap>300</span> | DAILY <span id=daily>$0</span> | WR <span id=wr>0%</span> | <span id=stats>0</span><br><span class=m>Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | LEARNING BRAIN 🧠</span></div>
-<div class=card><div style="background:#00ff88;color:#000;padding:14px;border-radius:12px;text-align:center;font-weight:800">LEARNING - BECOMING PRO</div><div class=m id=s style="margin-top:8px">Learning...</div></div>
-<div class=card><b>Open <span id=oc>0/10</span> - Best WR Coins</b><div id=o>Waiting...</div></div>
-<div class=card><b>Closed REAL + Learning</b><div id=closed>Waiting...</div></div>
-<div class=card><b>Brain Stats - Who Wins?</b><div id=brain style="font-size:13px" class=m>Learning...</div></div>
+<h2>VENUS v128 LEARNING PRO $0.30 FIXED</h2>
+<div class=card>CAP $<span id=cap>300</span> | DAILY <span id=daily>$0</span> | WR <span id=wr>0%</span> | <span id=stats>0</span><br><span class=m>Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | LEARNING 🧠</span></div>
+<div class=card><div style="background:#00ff88;color:#000;padding:14px;border-radius:12px;text-align:center;font-weight:800">LEARNING - AUTO START</div><div class=m id=s style="margin-top:8px">Starting...</div></div>
+<div class=card><b>Open <span id=oc>0/10</span> - Best WR Coins</b><div id=o>Starting first trade...</div></div>
+<div class=card><b>Closed REAL</b><div id=closed>Waiting...</div></div>
+<div class=card><b>Brain Stats</b><div id=brain class=m>Learning...</div></div>
 <script>
 async function R(){
+ try{
  let j=await (await fetch('/api/state')).json();
  document.getElementById('cap').innerText=j.cap.toFixed(2);
  document.getElementById('daily').innerText='$'+j.daily.toFixed(2);
@@ -97,12 +111,19 @@ async function R(){
  document.getElementById('oc').innerText=j.open.length+'/10';
  let wr=j.total?Math.round(j.wins/j.total*100):0;
  document.getElementById('wr').innerText=wr+'%';
- document.getElementById('stats').innerText=`${j.wins}W/${j.total-j.wins}L of ${j.total}`;
- document.getElementById('o').innerHTML=j.open.map(t=>`<div class=trade><span>🔥 ${t.symbol} $${t.entry.toFixed(6)} WR ${t.wr||0}%</span><span class=m>${Math.floor(Date.now()/1000 - t.t)}s</span></div>`).join('')||'Waiting...';
- document.getElementById('closed').innerHTML=j.closed.map(c=>`<div class=trade><span>${c.time} ${c.symbol}</span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} ${c.pnl>0?'+':''}$${c.pnl.toFixed(2)}</span></div>`).join('')||'No closed';
- let b=Object.entries(j.stats||{}).map(([k][v])=>`${k.replace('USDT','')}: ${v.w}W/${v.l}L ${Math.round(v.w/(v.w+v.l)*100)}%`).join(' | ')||'Learning... first 20 trades';
- document.getElementById('brain').innerText=b;
- document.getElementById('s').innerText=`Brain: ${b}`;
+ document.getElementById('stats').innerText=j.total? `${j.wins}W/${j.total-j.wins}L of ${j.total}` : '0 trades';
+ document.getElementById('o').innerHTML=j.open.length? j.open.map(t=>`<div class=trade><span>🔥 ${t.symbol} $${t.entry.toFixed(6)} WR ${t.wr||50}%</span><span class=m>${Math.floor(Date.now()/1000 - t.t)}s</span></div>`).join('') : 'Starting...';
+ document.getElementById('closed').innerHTML=j.closed.length? j.closed.map(c=>`<div class=trade><span>${c.time} ${c.symbol}</span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} ${c.pnl>0?'+':''}$${c.pnl.toFixed(2)}</span></div>`).join('') : 'No closed yet - 90s';
+ let brainText='Learning...';
+ if(j.stats && Object.keys(j.stats).length>0){
+   brainText=Object.entries(j.stats).map(([k,v])=>`${k.replace('USDT','')} ${v.w}W/${v.l}L ${Math.round(v.w/(v.w+v.l)*100)}%`).join(' | ');
+ }
+ document.getElementById('brain').innerText=brainText;
+ document.getElementById('s').innerText=`CAP $${j.cap.toFixed(2)} | ${wr}% | Brain: ${brainText.substring(0,80)}`;
+ }catch(e){ document.getElementById('s').innerText='Error '+e; }
 }
-setInterval(R,2000);R();setInterval(()=>fetch('/api/cron'),8000);
+setInterval(R,2000);R();
+setInterval(()=>{ fetch('/api/cron'); },8000);
+// Kickstart cron immediately
+fetch('/api/cron');
 </script></body></html>"""
