@@ -196,10 +196,32 @@ def home():
 @app.route("/frontend")
 def frontend_route():
     try:
-        with open("index.html","r") as f:
-            return f.read()
-    except:
-        return "<h1>v113 FIXED - index.html missing - redeploy</h1>"
+        # Vercel: api/index.py is in api/ folder, index.html is in root (../) or /var/task/
+        search_paths = [
+            "index.html",
+            "../index.html",
+            "./index.html",
+            "/var/task/index.html",
+            "/var/task/../index.html",
+            os.path.join(os.path.dirname(__file__), "index.html"),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "index.html")
+        ]
+        for p in search_paths:
+            try:
+                if os.path.exists(p):
+                    with open(p,"r") as f:
+                        return f.read()
+            except:
+                continue
+        # List files for debugging
+        try:
+            files = os.listdir(".")
+            parent = os.listdir("..") if os.path.exists("..") else []
+            return f"<h1>v113 FIXED - index.html not found. Root: {files} Parent: {parent} - redeploy</h1>"
+        except Exception as e2:
+            return f"<h1>v113 FIXED - index.html missing - {e2} - redeploy</h1>"
+    except Exception as e:
+        return f"<h1>v113 FIXED - index.html error {e} - redeploy</h1>"
 
 @app.route("/dashboard_data.json")
 def dashboard_data():
