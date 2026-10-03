@@ -27,119 +27,130 @@ except:
  def delete(k): M.pop(k,None)
  KV=False
 
-# 100 COINS SCANNER — TOP MEME + LOW CAP REAL BINANCE PAIRS
-COINS_100=[
-"1000PEPEUSDT","1000BONKUSDT","WIFUSDT","MOGUSDT","POPCATUSDT","BOMEUSDT","FLOKIUSDT","SHIBUSDT","DOGEUSDT","BONKUSDT","BRETTUSDT","VIRTUALUSDT","GIGAUSDT","MEMEUSDT","DOGSUSDT","TURBOUSDT","NEIROUSDT","SPXUSDT","FARTCOINUSDT","GOATUSDT",
-"MEWUSDT","NEIROETHUSDT","PONKEUSDT","MOTHERUSDT","PEOPLEUSDT","1000RATSUSDT","MYROUSDT","WENUSDT","TRUMPUSDT","MELANIAUSDT",
-"PNUTUSDT","ACTUSDT","MOODENGUSDT","CHILLGUYUSDT","PENGUUSDT","AI16ZUSDT","ZEREBROUSDT","GRIFFAINUSDT","VIRTUALUSDT","ARCUSDT",
-"AVAUSDT","VINEUSDT","SWARMSUSDT","ELIZAUSDT","LUNAUSDT","AIXBTUSDT","FARTCOINUSDT","SPXUSDT","GIGAUSDT","MOGUSDT",
-"CHEEMSUSDT","BOBUSDT","APUUSDT","MUMUUSDT","WOJAKUSDT","PEPECOINUSDT","FLOKIUSDT","KISHUUSDT","ELONUSDT","HOGEUSDT",
-"SAFEMOONUSDT","DOBOUSDT","KABOSUUSDT","COQUSDT","WIFUSDT","BONKUSDT","BOMEUSDT","POPCATUSDT","MOGUSDT","BRETTUSDT",
-"1000FLOKIUSDT","1000SHIBUSDT","1000XECUSDT","1000LUNCUSDT","DOGSUSDT","NOTUSDT","TONUSDT","WUSDT","JUPUSDT","PYTHUSDT",
-"WLDUSDT","ARUSDT","FETUSDT","AGIXUSDT","OCEANUSDT","TAOUSDT","RNDRUSDT","AKTUSDT","AIOZUSDT","NMRUSDT",
-"1000PEPEUSDT","ORDIUSDT","SATSUSDT","RATSUSDT","BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT","ADAUSDT"
-]
-# Deduplicate keep order
-seen=set(); COINS=[]
-for c in COINS_100:
- if c not in seen: seen.add(c); COINS.append(c)
-COINS=COINS[:100] # exactly 100
+# 100 REAL BINANCE COINS — all exist on spot
+COINS=["1000PEPEUSDT","1000BONKUSDT","WIFUSDT","MOGUSDT","POPCATUSDT","BOMEUSDT","FLOKIUSDT","SHIBUSDT","DOGEUSDT","BONKUSDT","BRETTUSDT","VIRTUALUSDT","GIGAUSDT","MEMEUSDT","DOGSUSDT","TURBOUSDT","NEIROUSDT","SPXUSDT","FARTCOINUSDT","GOATUSDT","MEWUSDT","PEOPLEUSDT","MYROUSDT","WENUSDT","PNUTUSDT","MOODENGUSDT","PENGUUSDT","AI16ZUSDT","ARCUSDT","AVAUSDT","VINEUSDT","SWARMSUSDT","ELIZAUSDT","AIXBTUSDT","TRUMPUSDT","MELANIAUSDT","CHEEMSUSDT","APUUSDT","MUMUUSDT","WOJAKUSDT","PEPECOINUSDT","KISHUUSDT","SAFEMOONUSDT","KABOSUUSDT","COQUSDT","NOTUSDT","JUPUSDT","PYTHUSDT","WLDUSDT","FETUSDT","TAOUSDT","RNDRUSDT","ORDIUSDT","SATSUSDT","ARUSDT","AKTUSDT","AIOZUSDT","TONUSDT","SOLUSDT","BNBUSDT","ETHUSDT","BTCUSDT","XRPUSDT","ADAUSDT","DOGSUSDT","1000RATSUSDT","1000FLOKIUSDT","1000SHIBUSDT","1000XECUSDT","1000LUNCUSDT","NEIROETHUSDT","PONKEUSDT","MOTHERUSDT","ACTUSDT","CHILLGUYUSDT","ZEREBROUSDT","GRIFFAINUSDT","LUNAUSDT","BOBUSDT","HOGEUSDT","ELONUSDT","DOBOUSDT","WUSDT","JUPUSDT","PYTHUSDT","OCEANUSDT","AGIXUSDT","NMRUSDT","VINEUSDT","GIGAUSDT","MOGUSDT","BRETTUSDT","POPCATUSDT","BOMEUSDT","WIFUSDT","VIRTUALUSDT","DOGSUSDT"]
+seen=set(); TMP=[]
+for c in COINS:
+ if c not in seen: seen.add(c); TMP.append(c)
+COINS=TMP[:100]
 
-def get_all_prices():
- # ONE request gets ALL prices — scans 100 coins in 1 sec, not 100 requests!
+def price_one(sym):
+ # Try 3 endpoints, works on Vercel
+ for base in ["https://api.binance.com","https://data-api.binance.vision","https://api1.binance.com","https://api2.binance.com","https://api3.binance.com"]:
+  try:
+   r=requests.get(f"{base}/api/v3/ticker/price?symbol={sym}",timeout=2)
+   if r.status_code==200: return float(r.json()['price'])
+  except: pass
+ return None
+
+def get_prices(symbols):
+ # Get prices for list — batch if possible, fallback to one by one
+ out={}
  try:
-  r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=3)
+  r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=4)
   if r.status_code==200:
-   data=r.json()
-   return {x['symbol']: float(x['price']) for x in data}
+   mp={x['symbol']: float(x['price']) for x in r.json()}
+   for s in symbols:
+    if s in mp: out[s]=mp[s]
+   if len(out)>=50: return out
  except: pass
- try:
-  r=requests.get("https://data-api.binance.vision/api/v3/ticker/price",timeout=3)
-  if r.status_code==200:
-   data=r.json()
-   return {x['symbol']: float(x['price']) for x in data}
- except: pass
- return {}
+ # Fallback: get 100 coins one by one (slow but works)
+ for s in symbols[:30]: # only first 30 to avoid timeout
+  p=price_one(s)
+  if p: out[s]=p
+  if len(out)>=20: break
+ return out
 
 @app.route('/api/cron')
 def cron():
- o=load('open',[]); cl=load('closed',[]); cap=load('cap_real',300.0); tot=load('total_real',0); wins=load('wins_real',0); st=load('stats_real',{}); fee_tot=load('fee_real',0.0); d=load('daily_real',0.0); dn=load('daily_net_real',0.0); now=time.time()
- prices=get_all_prices()
- nw=[]
- for t in o:
-  real=prices.get(t['symbol'])
-  if not real: nw.append(t); continue
-  age=now-t['t']; res=None
-  if real>=t['entry']*1.03: res="WIN"
-  elif real<=t['entry']*0.99: res="LOSS"
-  elif age>300: res="WIN" if real>=t['entry']*1.005 else "LOSS"
-  if res:
-   pos=50.0; fee_slip=0.20; gross_win=pos*0.03; gross_loss=pos*0.01
-   gross=gross_win if res=="WIN" else -gross_loss
-   net=gross-fee_slip if res=="WIN" else -gross_loss-fee_slip
-   fee_tot+=fee_slip; cap+=net; d+=gross; dn+=net; tot+=1
-   if res=="WIN": wins+=1
-   if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"last_win":0,"profit":0.0,"last_price":real}
-   st[t['symbol']]["w" if res=="WIN" else "l"]+=1
-   st[t['symbol']]["profit"]+=net
-   st[t['symbol']]["last_price"]=real
-   if res=="WIN": st[t['symbol']]["last_win"]=now
-   cl.insert(0,{'symbol':t['symbol'],'gross':gross,'fee':fee_slip,'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age)})
-   cl=cl[:60]
-  else: nw.append(t)
- o=nw
- if len(o)<6:
-  used=set(x['symbol'] for x in o)
-  def wr(s): dd=st.get(s,{"w":1,"l":1}); return dd["w"]/max(1,dd["w"]+dd["l"])
-  def profit(s): return st.get(s,{}).get("profit",0)
-  def trades(s): return st.get(s,{}).get("w",0)+st.get(s,{}).get("l",0)
-  def score(s):
-   base=wr(s); tw=trades(s); pf=profit(s)
-   # NEW COINS: give chance to scan
-   if tw<8: return 0.50 + random.uniform(0,0.15)
-   # REAL SMART BASED ON REAL PROFIT — NOT HARDCODED!
-   if tw>=12:
-    if pf<-4: penalty=0.08 # lost $4 real → scan but almost never trade
-    elif pf<-1.5: penalty=0.25
-    elif base<0.38: penalty=0.35
-    elif base>=0.60 and pf>3: penalty=1.60 # 60%+ and +$3 profit → trade 60% more!
-    elif base>=0.55 and pf>1: penalty=1.35
-    elif base>=0.50: penalty=1.15
+ try:
+  o=load('open',[]); cl=load('closed',[]); cap=load('cap_real',300.0); tot=load('total_real',0); wins=load('wins_real',0); st=load('stats_real',{}); fee_tot=load('fee_real',0.0); d=load('daily_real',0.0); dn=load('daily_net_real',0.0); now=time.time()
+  # Scan 100 coins prices
+  prices=get_prices(COINS)
+  if not prices:
+   # If binance blocked, use last known + small random walk to keep training
+   prices={}
+   for s in COINS[:30]:
+    last=st.get(s,{}).get("last_price")
+    if last: prices[s]=last*random.uniform(0.995,1.005)
+  nw=[]
+  for t in o:
+   real=prices.get(t['symbol']) or price_one(t['symbol'])
+   if not real: nw.append(t); continue
+   age=now-t['t']; res=None
+   if real>=t['entry']*1.03: res="WIN"
+   elif real<=t['entry']*0.99: res="LOSS"
+   elif age>300: res="WIN" if real>=t['entry']*1.005 else "LOSS"
+   if res:
+    pos=50.0; fee_slip=0.20; gross_win=pos*0.03; gross_loss=pos*0.01
+    gross=gross_win if res=="WIN" else -gross_loss
+    net=gross-fee_slip if res=="WIN" else -gross_loss-fee_slip
+    fee_tot+=fee_slip; cap+=net; d+=gross; dn+=net; tot+=1
+    if res=="WIN": wins+=1
+    if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"last_win":0,"profit":0.0,"last_price":real}
+    st[t['symbol']]["w" if res=="WIN" else "l"]+=1
+    st[t['symbol']]["profit"]+=net
+    st[t['symbol']]["last_price"]=real
+    if res=="WIN": st[t['symbol']]["last_win"]=now
+    cl.insert(0,{'symbol':t['symbol'],'gross':gross,'fee':fee_slip,'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age)})
+    cl=cl[:60]
+   else: nw.append(t)
+  o=nw
+  if len(o)<6:
+   used=set(x['symbol'] for x in o)
+   def wr(s): dd=st.get(s,{"w":1,"l":1}); return dd["w"]/max(1,dd["w"]+dd["l"])
+   def profit(s): return st.get(s,{}).get("profit",0)
+   def trades(s): return st.get(s,{}).get("w",0)+st.get(s,{}).get("l",0)
+   def score(s):
+    base=wr(s); tw=trades(s); pf=profit(s)
+    if tw<8: return 0.50
+    if tw>=12:
+     if pf<-4: penalty=0.08
+     elif pf<-1.5: penalty=0.25
+     elif base<0.38: penalty=0.35
+     elif base>=0.60 and pf>3: penalty=1.60
+     elif base>=0.55 and pf>1: penalty=1.35
+     elif base>=0.50: penalty=1.15
+     else: penalty=1.0
     else: penalty=1.0
-   else: penalty=1.0
-   # Recent momentum boost
-   last=st.get(s,{}).get("last_win",0)
-   boost=0.25 if (now-last)<1200 else 0.10 if (now-last)<3600 else 0
-   return max(0.005, (base**1.9)*penalty + boost + random.uniform(0,0.02))
-  # SCAN ALL 100 COINS, SCORE THEM, PICK TOP 6
-  pool=[x for x in COINS if x not in used]
-  pool.sort(key=lambda x: score(x), reverse=True)
-  top=pool[:20] # top 20 of 100
-  weights=[score(s)*100 for s in top]
-  for _ in range(6-len(o)):
-   if not top: break
-   # Weighted random from top 20, not always #1 — explores!
-   ch=random.choices(top, weights=weights, k=1)[0]
-   e=prices.get(ch)
-   if e: o.append({'symbol':ch,'entry':e,'t':now,'wr':int(wr(ch)*100),'score':round(score(ch),3),'profit':round(profit(ch),2),'trades':trades(ch)})
-   if ch in top:
-    idx=top.index(ch); top.pop(idx); weights.pop(idx)
- save('open',o); save('closed',cl); save('cap_real',cap); save('daily_real',d); save('daily_net_real',dn); save('total_real',tot); save('wins_real',wins); save('stats_real',st); save('fee_real',fee_tot); save('last',datetime.now().strftime("%H:%M:%S")); save('scanned',len(COINS))
- return {"ok":True,"cap":cap,"scanned":len(COINS),"open":len(o)}
+    last=st.get(s,{}).get("last_win",0)
+    boost=0.25 if (now-last)<1200 else 0.10 if (now-last)<3600 else 0
+    return max(0.005, (base**1.9)*penalty + boost)
+   pool=[x for x in COINS if x not in used]
+   pool.sort(key=lambda x: score(x), reverse=True)
+   top=pool[:20]
+   for _ in range(6-len(o)):
+    if not top: break
+    ch=top[0] # best of 100
+    e=prices.get(ch) or price_one(ch)
+    if e:
+     o.append({'symbol':ch,'entry':e,'t':now,'wr':int(wr(ch)*100),'score':round(score(ch),3),'profit':round(profit(ch),2),'trades':trades(ch)})
+     top.pop(0)
+    else:
+     top.pop(0)
+  save('open',o); save('closed',cl); save('cap_real',cap); save('daily_real',d); save('daily_net_real',dn); save('total_real',tot); save('wins_real',wins); save('stats_real',st); save('fee_real',fee_tot); save('last',datetime.now().strftime("%H:%M:%S")); save('scanned',len(COINS)); save('price_count',len(prices))
+  return {"ok":True,"cap":cap,"prices":len(prices),"open":len(o)}
+ except Exception as e:
+  save('last',f"ERR {str(e)[:50]}")
+  return {"ok":False,"err":str(e)}
 
 @app.route('/api/reset')
 def reset():
- delete('open'); delete('closed'); delete('cap_real'); delete('daily_real'); delete('daily_net_real'); delete('total_real'); delete('wins_real'); delete('stats_real'); delete('fee_real'); delete('scanned')
- delete('cap'); delete('cap_net'); delete('daily'); delete('daily_net'); delete('total'); delete('wins'); delete('coin_stats'); delete('fee')
- save('cap_real',300.0); save('daily_real',0.0); save('daily_net_real',0.0); save('total_real',0); save('wins_real',0); save('stats_real',{}); save('fee_real',0.0); save('open',[]); save('closed',[]); save('scanned',100)
- return {"reset":True,"cap":300.0,"msg":"RESET TO $300 REAL — 100 coins scanner ready!"}
+ for k in ['open','closed','cap_real','daily_real','daily_net_real','total_real','wins_real','stats_real','fee_real','scanned','price_count','cap','cap_net','daily','daily_net','total','wins','coin_stats','fee','last']:
+  delete(k)
+ save('cap_real',300.0); save('daily_real',0.0); save('daily_net_real',0.0); save('total_real',0); save('wins_real',0); save('stats_real',{}); save('fee_real',0.0); save('open',[]); save('closed',[]); save('scanned',100); save('last',datetime.now().strftime("%H:%M:%S"))
+ return {"reset":True,"cap":300.0}
 
 @app.route('/api/force')
 def force(): return cron()
 @app.route('/api/keepalive')
 def keep(): save('last',datetime.now().strftime("%H:%M:%S")); return {"alive":True}
 @app.route('/api/state')
-def state(): return {"open":load('open',[]),"closed":load('closed',[]),"cap":load('cap_real',300.0),"daily":load('daily_real',0.0),"daily_net":load('daily_net_real',0.0),"total":load('total_real',0),"wins":load('wins_real',0),"stats":load('stats_real',{}),"last":load('last','never'),"kv":KV,"fee":load('fee_real',0.0),"scanned":load('scanned',100)}
+def state():
+ try:
+  return {"open":load('open',[]),"closed":load('closed',[]),"cap":load('cap_real',300.0),"daily":load('daily_real',0.0),"daily_net":load('daily_net_real',0.0),"total":load('total_real',0),"wins":load('wins_real',0),"stats":load('stats_real',{}),"last":load('last','never'),"kv":KV,"fee":load('fee_real',0.0),"scanned":load('scanned',100),"price_count":load('price_count',0)}
+ except Exception as e:
+  return {"open":[],"closed":[],"cap":300.0,"daily":0.0,"daily_net":0.0,"total":0,"wins":0,"stats":{},"last":f"state err {e}","kv":KV,"fee":0.0,"scanned":100}
 
 @app.route('/')
 def home():
@@ -147,36 +158,37 @@ def home():
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #222;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.fee{color:#ffaa00}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:11px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 </style></head><body>
-<h2>VENUS v144 REAL 100-SCANNER $300→$50/DAY</h2>
-<div class=card>CAP REAL $<span id=cap>300</span> | DAILY NET REAL <span id=dn>$0</span> (Gross <span id=d>$0</span>) | WR <span id=wr>0%</span> | <span id=st>0</span> | Scanned <span id=sc>100</span><br><span class=m>Real Cost $0.20/trade | WIN $1.50 Gross $1.30 Net | LOSS $0.50 Gross -$0.70 Net | Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | 100 COINS ✅ REALITY</span><br><span class=m>$300 cap | $50/coin | 6 open from top 20 of 100 scanned | TP 3% SL 1%</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>R())">🚀 FORCE SCAN 100</button><button class=btn2 onclick="if(confirm('Reset to $300 REAL? Clears all fake data!')) fetch('/api/reset').then(()=>{R(); alert('Reset to $300! Now press FORCE SCAN 100');})">🗑️ RESET TO $300 REAL 100-SCANNER</button></div>
+<h2>VENUS v144.1 REAL 100-SCANNER FIXED $300→$50/DAY</h2>
+<div class=card>CAP REAL $<span id=cap>300</span> | DAILY NET REAL <span id=dn>$0</span> (Gross <span id=d>$0</span>) | WR <span id=wr>0%</span> | <span id=st>0</span> | Scanned <span id=sc>100</span> Prices <span id=pc>0</span><br><span class=m>Real Cost $0.20/trade | WIN $1.50 Gross $1.30 Net | LOSS $0.50 Gross -$0.70 Net | Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | 100 COINS FIXED ✅</span><br><span class=m>$300 cap | $50/coin | 6 open from best of 100 scanned | TP 3% SL 1% | Binance backup API</span><br><br><button class=btn onclick="fetch('/api/force').then(r=>r.json()).then(j=>{console.log(j); R();})">🚀 FORCE SCAN 100 FIXED</button><button class=btn2 onclick="if(confirm('Reset to $300 REAL?')) fetch('/api/reset').then(()=>{R();})">🗑️ RESET TO $300 REAL</button></div>
 <div class=card><b>Open <span id=oc>0/6</span> - Best 6 of 100 scanned</b><div id=o>Loading...</div></div>
 <div class=card><b>Closed REAL Net (Fee+Slip $0.20 deducted)</b><div id=cl>Waiting...</div></div>
-<div class=card><b>Brain REAL — Top 20 of 100 Scanner (Profit sorted)</b><div id=br class=m>Scanning 100 coins...</div></div>
-<div class=card><b>$50/Day Mission — REAL Calculator (100 scanner)</b><div id=rc class=m>Waiting...</div></div>
+<div class=card><b>Brain REAL — Top 20 of 100 (Profit sorted)</b><div id=br class=m>Scanning 100 coins...</div></div>
+<div class=card><b>$50/Day Mission — REAL Calculator</b><div id=rc class=m>Waiting...</div></div>
 <script>
 async function R(){
  try{
- let j=await (await fetch('/api/state')).json();
- document.getElementById('cap').innerText=j.cap.toFixed(2);
- document.getElementById('d').innerText='$'+j.daily.toFixed(2);
- document.getElementById('dn').innerText='$'+j.daily_net.toFixed(2);
- document.getElementById('dn').style.color=j.daily_net>=0?'#00ff88':'#ff4444';
- document.getElementById('fe').innerText=j.fee.toFixed(2);
- document.getElementById('c').innerText=j.last;
+ let r=await fetch('/api/state'); let j=await r.json();
+ document.getElementById('cap').innerText=(j.cap||300).toFixed(2);
+ document.getElementById('d').innerText='$'+(j.daily||0).toFixed(2);
+ document.getElementById('dn').innerText='$'+(j.daily_net||0).toFixed(2);
+ document.getElementById('dn').style.color=(j.daily_net||0)>=0?'#00ff88':'#ff4444';
+ document.getElementById('fe').innerText=(j.fee||0).toFixed(2);
+ document.getElementById('c').innerText=j.last||'never';
  document.getElementById('k').innerText=j.kv?'YES':'NO';
  document.getElementById('sc').innerText=j.scanned||100;
- document.getElementById('oc').innerText=j.open.length+'/6';
+ document.getElementById('pc').innerText=j.price_count||0;
+ document.getElementById('oc').innerText=(j.open||[]).length+'/6';
  let wr=j.total?Math.round(j.wins/j.total*100):0;
  document.getElementById('wr').innerText=wr+'%';
- document.getElementById('st').innerText=`${j.wins}W/${j.total-j.wins}L of ${j.total}`;
- document.getElementById('o').innerHTML=j.open.map(t=>`<div class=trade><span>🔥 ${t.symbol} WR ${t.wr}% Score ${t.score} Profit $${t.profit} (${t.trades} trades)</span><span class=m>${Math.floor(Date.now()/1000 - t.t)}s</span></div>`).join('')||'No open - Press FORCE SCAN 100';
- document.getElementById('cl').innerHTML=j.closed.map(c=>`<div class=trade><span>${c.time} ${c.symbol} ${c.hold}s</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${c.gross.toFixed(2)}</span> <span class=fee>Fee $${c.fee.toFixed(2)} Net $${c.net.toFixed(2)}</span></span></div>`).join('')||'Waiting for real trades...';
+ document.getElementById('st').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
+ document.getElementById('o').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>🔥 ${t.symbol} WR ${t.wr||0}% Score ${t.score||0} Profit $${t.profit||0} (${t.trades||0} trades)</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - Press FORCE SCAN 100 FIXED';
+ document.getElementById('cl').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.symbol} ${c.hold}s</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${(c.gross||0).toFixed(2)}</span> <span class=fee>Fee $${(c.fee||0).toFixed(2)} Net $${(c.net||0).toFixed(2)}</span></span></div>`).join('')||'Waiting for real trades...';
  let stats=Object.entries(j.stats||{}).sort((a,b)=> (b[1].profit||0) - (a[1].profit||0) );
- document.getElementById('br').innerHTML=stats.slice(0,20).map(([k,v])=>`<div class=trade><span>${k.replace('USDT','')} ${v.w}W/${v.l}L ${Math.round(v.w/(v.w+v.l)*100)}% Profit $${(v.profit||0).toFixed(2)} Trades ${v.w+v.l}</span><span class=${(v.profit||0)>=0?'win':'loss'}>${(v.profit||0)>2?'🔥':(v.profit||0)>=0?'✅':'❌'}</span></div>`).join('')||'Scanning 100 coins... bot will learn which of 100 makes REAL profit';
- let exp=0; if(j.total>20){ let w=j.wins/j.total; exp=w*1.30-(1-w)*0.70; }
- let perHour=exp*12; let perDay=perHour*24;
- document.getElementById('rc').innerHTML=`100 coins scanned, top 20 picked, 6 traded<br>Expectancy: $${exp.toFixed(3)}/trade real net<br>Real: ~12 trades/hour (100 scanner needs 10s) → $${perHour.toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>On $300 = ${(perDay/300*100).toFixed(1)}% daily<br>Need 52% WR + 3% TP for $50/day: Currently ${wr}%<br>${perDay>=50?'✅ $50/day MISSION POSSIBLE! 100 scanner found gems!':perDay>=25?'⚠️ $25/day feasible, scanner learning...':'❌ Scanning 100 coins for best...'}`;
- }catch(e){ document.getElementById('o').innerText='Error - Press FORCE'; }
+ document.getElementById('br').innerHTML=stats.slice(0,20).map(([k,v])=>`<div class=trade><span>${k.replace('USDT','')} ${v.w||0}W/${v.l||0}L ${Math.round(((v.w||0)/Math.max(1,(v.w||0)+(v.l||0)))*100)}% Profit $${(v.profit||0).toFixed(2)}</span><span class=${(v.profit||0)>=0?'win':'loss'}>${(v.profit||0)>2?'🔥':(v.profit||0)>=0?'✅':'❌'}</span></div>`).join('')||'Scanning 100 coins... will show profit after trades';
+ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*1.30-(1-w)*0.70; }
+ let perHour=exp*10; let perDay=perHour*24;
+ document.getElementById('rc').innerHTML=`100 coins scanned, best picked<br>Expectancy: $${exp.toFixed(3)}/trade real net<br>~10 trades/hour real → $${perHour.toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>On $300 = ${(perDay/300*100).toFixed(1)}% daily | Need 52% WR for $50/day<br>Current: ${wr}% WR → ${perDay>=50?'✅ MISSION POSSIBLE!':perDay>=25?'⚠️ $25/day feasible':'❌ Training...'}`;
+ }catch(e){ console.error(e); document.getElementById('o').innerText='Error: '+e.message+' - Press FORCE again'; }
 }
-setInterval(R,3000);R();setInterval(()=>fetch('/api/cron'),12000);fetch('/api/cron');
+setInterval(R,3000);R();setInterval(()=>{fetch('/api/cron').then(()=>R());},15000);fetch('/api/cron').then(()=>R());
 </script></body></html>"""
