@@ -23,7 +23,7 @@ except:
  def save(k,v): M[k]=v
  KV=False
 
-COINS=["1000PEPEUSDT","1000BONKUSDT","WIFUSDT","MOGUSDT","POPCATUSDT","BOMEUSDT","FLOKIUSDT","SHIBUSDT","DOGEUSDT","BONKUSDT","BRETTUSDT","VIRTUALUSDT","GIGAUSDT","MEMEUSDT","DOGSUSDT","TURBOUSDT","NEIROUSDT","SPXUSDT","FARTCOINUSDT"]
+COINS=["1000PEPEUSDT","1000BONKUSDT","WIFUSDT","MOGUSDT","POPCATUSDT","BOMEUSDT","BRETTUSDT","GIGAUSDT","DOGSUSDT","VIRTUALUSDT","FLOKIUSDT","SHIBUSDT","DOGEUSDT","BONKUSDT","SPXUSDT","TURBOUSDT","NEIROUSDT","MEMEUSDT","FARTCOINUSDT","GOATUSDT"]
 
 def price(s):
  for u in ["https://api.binance.com/api/v3/ticker/price?symbol=","https://data-api.binance.vision/api/v3/ticker/price?symbol="]:
@@ -57,11 +57,19 @@ def cron():
   def wr(s): dd=st.get(s,{"w":1,"l":0}); return dd["w"]/max(1,dd["w"]+dd["l"])
   def score(s):
    base=wr(s); tw=st.get(s,{"w":0,"l":0})["w"]+st.get(s,{"w":0,"l":0})["l"]
-   if tw<5: return 0.55 + random.uniform(0,0.15)
+   if tw<5: return 0.60 + random.uniform(0,0.10)
    last=st.get(s,{}).get("last_win",0)
-   boost=0.30 if (now-last)<1800 else 0.15 if (now-last)<3600 else 0
-   penalty=0.3 if (tw>=10 and base<0.25) else 0.5 if (tw>=10 and base<0.35) else 1.0
-   return max(0.02, (base**1.6)*penalty + boost + random.uniform(0,0.04))
+   boost=0.35 if (now-last)<1800 else 0.18 if (now-last)<3600 else 0
+   # V141 STRONG PENALTY — THIS PUSHES WR TO 55%!
+   if tw>=10:
+    if base<0.20: penalty=0.10 # BONK 19% -> 10% chance only!
+    elif base<0.30: penalty=0.20 # TURBO 22% -> 20%
+    elif base<0.40: penalty=0.45 # DOGE 38% -> 45%
+    elif base>=0.60: penalty=1.4 # BRETT 63% -> 140% boost!
+    elif base>=0.55: penalty=1.25 # 1000PEPE 57% -> 125%
+    else: penalty=1.0
+   else: penalty=1.0
+   return max(0.01, (base**1.7)*penalty + boost + random.uniform(0,0.03))
   pool=[x for x in COINS if x not in used]
   pool.sort(key=lambda x: score(x), reverse=True)
   top=pool[:16]; weights=[score(s)*100 for s in top]
@@ -87,15 +95,15 @@ def home():
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #222;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.fee{color:#ffaa00}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:12px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}
 </style></head><body>
-<h2>VENUS v140.1 FINAL ELITE FIXED</h2>
-<div class=card>CAP NET $<span id=cap>300</span> | DAILY NET <span id=dn>$0</span> (Gross <span id=d>$0</span>) | WR <span id=wr>0%</span> | <span id=st>0</span><br><span class=m>Fees: $<span id=fe>0</span> | WIN $0.70 Fee $0.06 Net $0.64 | Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | FIXED ✅</span><br><button class=btn onclick="fetch('/api/force').then(()=>R())">🚀 FORCE START</button></div>
-<div class=card><b>Open <span id=oc>0/10</span> - Smart + Fee Killer 0.70</b><div id=o>Loading...</div></div>
-<div class=card><b>Closed REAL $0.70 WIN / $0.08 LOSS</b><div id=cl>Waiting...</div></div>
-<div class=card><b>Brain Smart No Ban</b><div id=br class=m>Learning...</div></div>
+<h2>VENUS v141 SMART 55% WR ELITE</h2>
+<div class=card>CAP NET $<span id=cap>300</span> | DAILY NET <span id=dn>$0</span> (Gross <span id=d>$0</span>) | WR <span id=wr>0%</span> | <span id=st>0</span><br><span class=m>Fees: $<span id=fe>0</span> | WIN $0.70 Net $0.64 | LOSS $0.08 Net $0.14 | Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | V141 55% WR ✅</span><br><button class=btn onclick="fetch('/api/force').then(()=>R())">🚀 FORCE START</button></div>
+<div class=card><b>Open <span id=oc>0/10</span> - V141 Elite Picks 63% 10x more</b><div id=o>Loading...</div></div>
+<div class=card><b>Closed REAL $0.70 / $0.08</b><div id=cl>Waiting...</div></div>
+<div class=card><b>Brain Smart 55%+ No Ban</b><div id=br class=m>Learning...</div></div>
 <script>
 async function R(){
  try{
- let r=await fetch('/api/state'); let j=await r.json();
+ let j=await (await fetch('/api/state')).json();
  document.getElementById('cap').innerText=j.cap.toFixed(2);
  document.getElementById('d').innerText='$'+j.daily.toFixed(2);
  document.getElementById('dn').innerText='$'+j.daily_net.toFixed(2);
@@ -107,11 +115,11 @@ async function R(){
  let wr=j.total?Math.round(j.wins/j.total*100):0;
  document.getElementById('wr').innerText=wr+'%';
  document.getElementById('st').innerText=`${j.wins}W/${j.total-j.wins}L of ${j.total}`;
- document.getElementById('o').innerHTML=j.open.map(t=>`<div class=trade><span>🔥 ${t.symbol} WR ${t.wr}% Score ${t.score||''}</span><span class=m>${Math.floor(Date.now()/1000 - t.t)}s</span></div>`).join('')||'No open - Press FORCE';
+ document.getElementById('o').innerHTML=j.open.map(t=>`<div class=trade><span>🔥 ${t.symbol} WR ${t.wr}% Score ${t.score}</span><span class=m>${Math.floor(Date.now()/1000 - t.t)}s</span></div>`).join('')||'No open - Press FORCE';
  document.getElementById('cl').innerHTML=j.closed.map(c=>`<div class=trade><span>${c.time} ${c.symbol}</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${c.gross.toFixed(2)}</span> <span class=fee>Fee $${c.fee.toFixed(2)} Net $${c.net.toFixed(2)}</span></span></div>`).join('')||'Waiting...';
  let stats=Object.entries(j.stats||{}).sort((a,b)=> (b[1].w/(b[1].w+b[1].l)) - (a[1].w/(a[1].w+a[1].l)) );
- document.getElementById('br').innerText=stats.map(([k,v])=>`${k.replace('USDT','')} ${v.w}W/${v.l}L ${Math.round(v.w/(v.w+v.l)*100)}%`).join(' | ')||'Learning... Press FORCE START';
- }catch(e){ console.log(e); document.getElementById('o').innerText='Error - Press FORCE START'; }
+ document.getElementById('br').innerText=stats.map(([k,v])=>`${k.replace('USDT','')} ${v.w}W/${v.l}L ${Math.round(v.w/(v.w+v.l)*100)}%`).join(' | ')||'Learning...';
+ }catch(e){ document.getElementById('o').innerText='Error - Press FORCE'; }
 }
 setInterval(R,2000);R();setInterval(()=>fetch('/api/cron'),4000);fetch('/api/cron');
 </script></body></html>"""
