@@ -6,50 +6,14 @@
       "use": "@vercel/python"
     },
     {
-      "src": "main.py",
-      "use": "@vercel/python"
-    },
-    {
       "src": "index.html",
       "use": "@vercel/static"
-    },
-    {
-      "src": "dashboard-24-7.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "agents/**",
-      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/balance",
+      "src": "/api/(.*)",
       "dest": "/api/index.py"
-    },
-    {
-      "src": "/api/scan",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/api/order",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/api/training",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/dashboard_data.json",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/frontend",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/dashboard-24-7.html",
-      "dest": "/dashboard-24-7.html"
     },
     {
       "src": "/(.*)",
