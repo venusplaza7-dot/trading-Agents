@@ -1,3 +1,40 @@
+import json, os
+try:
+    from upstash_redis import Redis
+    redis = Redis.from_env()  # reads KV_REST_API_URL + TOKEN you just connected
+    USE_KV = True
+except:
+    redis = None
+    USE_KV = False
+
+def get_trades():
+    if USE_KV:
+        try:
+            data = redis.get("venus_trades")
+            return json.loads(data) if data else []
+        except:
+            return []
+    return []
+
+def save_trades(trades):
+    if USE_KV:
+        try:
+            redis.set("venus_trades", json.dumps(trades))
+        except Exception as e:
+            print(f"KV save error: {e}")
+
+def get_cap():
+    if USE_KV:
+        try:
+            v = redis.get("venus_cap")
+            return float(v) if v else 0.0
+        except:
+            return 0.0
+    return 0.0
+
+def save_cap(cap):
+    if USE_KV:
+        redis.set("venus_cap", str(cap))
 import os, json, time, math, threading
 from datetime import datetime
 import requests
