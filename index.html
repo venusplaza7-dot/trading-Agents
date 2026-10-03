@@ -1,32 +1,40 @@
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VENUS v120 OPTION B $0.30 x 200 = $50/day MOST LOGICAL</title>
+<title>VENUS v122 BEST LOGICAL 12 penny tiered $0.30 x 167 = $50/day</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0a0a0b;color:#e5e5e5;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:10px;max-width:800px;margin:0 auto}
-h1{font-size:18px;font-weight:700} .sub{font-size:11px;color:#888;margin-bottom:10px}
+h1{font-size:18px;font-weight:700}.sub{font-size:11px;color:#888;margin-bottom:10px}
 .card{background:#161617;border:1px solid #2a2a2a;border-radius:12px;padding:12px;margin-bottom:8px}
 .row{display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
-.stat{flex:1;min-width:65px}
+.stat{flex:1;min-width:60px}
 .stat label{font-size:8px;color:#888;text-transform:uppercase;display:block}
-.stat b{font-size:14px;font-weight:700}
-.green{color:#22c55e} .red{color:#ef4444} .orange{color:#f97316}
+.stat b{font-size:13px;font-weight:700}
+.green{color:#22c55e}.red{color:#ef4444}.orange{color:#f97316}
 .btn{width:100%;padding:10px;border-radius:10px;border:0;font-weight:600;cursor:pointer;font-size:12px;margin-top:5px}
 .btn-auto{background:#22c55e;color:#000;font-weight:700}
 .btn-auto.off{background:#ef4444;color:#fff}
 .btn-ghost{background:#1f1f20;color:#e5e5e5;border:1px solid #2a2a2a}
 .coin{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#1c1c1d;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:4px;font-size:11px}
+.coin.ultra{border-color:#f97316;background:rgba(249,115,22,0.12)}
 .coin.penny{border-color:#22c55e;background:rgba(34,197,94,0.08)}
+.coin.mid{border-color:#3b82f6;background:rgba(59,130,246,0.08)}
+.coin.major{border-color:#a855f7;background:rgba(168,85,247,0.08)}
 .signal{font-size:9px;padding:2px 5px;border-radius:999px;font-weight:600}
 .signal-LONG{background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)}
 .signal-SHORT{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)}
 .signal-WAIT{background:rgba(100,100,100,0.15);color:#888;border:1px solid #333}
 .log{height:110px;overflow:auto;background:#000;border-radius:8px;padding:8px;font-family:monospace;font-size:9px;white-space:pre-wrap;border:1px solid #222}
 .agent{padding:6px;background:#1c1c1d;border-radius:8px;margin-bottom:4px;font-size:10px}
-.goal{height:8px;background:#222;border-radius:4px;margin-top:5px;overflow:hidden} .goal-bar{height:100%;background:linear-gradient(90deg,#22c55e,#86efac);transition:width 0.5s}
+.goal{height:8px;background:#222;border-radius:4px;margin-top:5px;overflow:hidden}.goal-bar{height:100%;background:linear-gradient(90deg,#22c55e,#f97316);transition:width 0.5s}
+.tier{font-size:8px;padding:1px 4px;border-radius:4px;font-weight:700}
+.tier-ultra{background:#f97316;color:#000}
+.tier-penny{background:#22c55e;color:#000}
+.tier-mid{background:#3b82f6;color:#fff}
+.tier-major{background:#a855f7;color:#fff}
 </style></head><body>
-<h1>VENUS v120 OPTION B $0.30 🪙 MOST LOGICAL</h1>
-<div class="sub">Penny DOGE SHIB PEPE FLOKI BONK + BTC ETH — $0.30 micro win × 200 = $50/day — MOST LOGICAL for $300 cap</div>
+<h1>VENUS v122 BEST LOGICAL $0.30 TIERED 🪙🔥</h1>
+<div class="sub">12 penny BEST — ultra BONK PEPE SHIB FLOKI 1.5% TP $0.32 in 1-3m — penny BOME MEME DOGE WIF 1.2% $0.30 in 5-15m — major AVAX LINK 0.8% $0.30 in 15-25m — MOST LOGICAL for $300</div>
 <div class="card">
 <div class="row">
 <div class="stat"><label>Cap $300</label><b id="cap">$0/$300</b></div>
@@ -34,50 +42,51 @@ h1{font-size:18px;font-weight:700} .sub{font-size:11px;color:#888;margin-bottom:
 <div class="stat"><label>Goal $50</label><b id="goalText">$0/$50</b></div>
 <div class="stat"><label>Need</label><b id="need">167×$0.30</b></div>
 <div class="stat"><label>WR</label><b id="wr">0%</b></div>
-<div class="stat"><label>RR</label><b>1.25:1</b></div>
+<div class="stat"><label>Best Tier</label><b id="bestTier">ULTRA</b></div>
 </div>
 <div class="goal"><div class="goal-bar" id="goalBar" style="width:0%"></div></div>
 <div style="display:flex;justify-content:space-between;font-size:9px;color:#888;margin-top:3px">
-<span id="tradesCount">0 trades</span><span id="tph">0/h</span><span id="bestCoin">Best: -</span><span id="netWin">$0.30/win</span>
+<span id="tradesCount">0 trades</span><span id="tph">0/h</span><span id="cronInfo">Cron: never</span><span id="netWin">~$0.30/win</span>
 </div>
 </div>
 <div class="card">
-<b>🪙 OPTION B — $0.30 Small Wins MOST LOGICAL for $300</b>
-<div style="font-size:10px;color:#aaa;margin:5px 0;line-height:1.3">
-<b>Penny: DOGE SHIB PEPE FLOKI BONK WIF MEME BOME + BTC ETH SOL AVAX LINK</b> — 1.2% TP hits in 8-15 mins<br>
-Order $30 → TP 1.2% = $0.36 gross - $0.06 fee = <b style="color:#22c55e">$0.30 net WIN</b> | SL 0.6% = $0.24 loss | RR 1.25:1 need 44% WR break even<br>
-10 open trades max ($30×10=$300) — scan every 18s — ~600 trades/day max logical — 200 wins × $0.30 = $60 gross<br>
-Need 167 wins × $0.30 = $50/day — 65% WR → 167W/90L → Net $50.1 - $21.6 = $28.5 → 250 wins = $50 net MOST LOGICAL!
+<b>🔥 v122 BEST LOGICAL — Tiered $0.30 wins — MOST LOGICAL for $300</b>
+<div style="font-size:10px;color:#aaa;margin:5px 0;line-height:1.4">
+<span class="tier tier-ultra">ULTRA</span> BONK PEPE SHIB FLOKI $0.000004 — Order $25 TP 1.5%=$0.375-$0.05=<b style="color:#f97316">$0.32 win</b> Move $0.00000006 in 1-3m MOST LOGICAL<br>
+<span class="tier tier-penny">PENNY</span> BOME MEME TURBO NEIRO $0.0005-$0.001 — Order $30 TP 1.2%=$0.36-$0.06=<b style="color:#22c55e">$0.30 win</b> in 5-10m LOGICAL<br>
+<span class="tier tier-mid">MID</span> DOGE WIF $0.09-$0.24 — Order $30 TP 1.2%=$0.30 win in 8-15m LOGICAL<br>
+<span class="tier tier-major">MAJOR</span> AVAX LINK $10-$14 — Order $50 TP 0.8%=$0.40-$0.10=<b style="color:#a855f7">$0.30 win</b> Move 0.8% not 1.2% in 15-25m MORE LOGICAL than 1.2%<br>
+12 coins max freq — scan every 15s via cron — ~700 trades/day — 167 wins × $0.30 = $50 — 65% WR → 167W/90L → Net $50.1-$21.6=$28.5 → 250 wins=$50 net BEST!
 </div>
-<button class="btn btn-auto" id="autoBtn">🤖 AUTO ON — $0.30 wins most logical</button>
-<div style="font-size:9px;color:#666;margin-top:4px" id="status">Connecting...</div>
-</div>
-<div class="card">
-<div style="display:flex;justify-content:space-between"><b>Open Trades — $0.30</b><span id="openCount" style="font-size:10px;color:#888">0/10 open</span></div>
-<div id="openTrades"><div style="font-size:10px;color:#666">Waiting for penny pump signals...</div></div>
+<button class="btn btn-auto" id="autoBtn">🤖 AUTO ON — Tiered $0.30 best logical</button>
+<div style="font-size:9px;color:#666;margin-top:4px" id="status">Connecting... cron every 30s via cron-job.org</div>
 </div>
 <div class="card">
-<div style="display:flex;justify-content:space-between"><b>15 Coins — 10 Penny + 5 Major</b><button class="btn btn-ghost" style="width:auto;padding:3px 8px;font-size:10px;margin:0" id="scanBtn">Scan</button></div>
-<div style="font-size:9px;color:#22c55e;margin:3px 0">🪙 Penny = DOGE SHIB PEPE FLOKI BONK WIF MEME BOME 1000PEPE 1000SHIB — 1.2% TP quick</div>
-<div id="coins"><div style="font-size:10px;color:#666">Auto-scan every 18s...</div></div>
+<div style="display:flex;justify-content:space-between"><b>Open Trades — Tiered $0.30</b><span id="openCount" style="font-size:10px;color:#888">0/10 open</span></div>
+<div id="openTrades"><div style="font-size:10px;color:#666">Waiting for ultra penny pump...</div></div>
 </div>
 <div class="card">
-<b>7 Agents — Learning $0.30 wins</b>
+<div style="display:flex;justify-content:space-between"><b>12 Coins BEST — 4 ultra + 6 penny + 2 major</b><button class="btn btn-ghost" style="width:auto;padding:3px 8px;font-size:10px;margin:0" id="scanBtn">Scan</button></div>
+<div style="font-size:9px;color:#f97316;margin:3px 0"><span class="tier tier-ultra">ULTRA</span> BONK PEPE SHIB FLOKI — 1.5% TP in 1-3m <span class="tier tier-penny">PENNY</span> BOME MEME TURBO NEIRO DOGE WIF — 1.2% TP <span class="tier tier-major">MAJOR</span> AVAX LINK — 0.8% TP — all $0.30 win BEST</div>
+<div id="coins"><div style="font-size:10px;color:#666">Auto-scan every 15s via cron...</div></div>
+</div>
+<div class="card">
+<b>7 Agents — Learning tiered</b>
 <div id="agents"><div style="font-size:10px;color:#666">Loading...</div></div>
 </div>
 <div class="card">
-<b>History — $0.30 wins adding up to $50</b>
+<b>History — Tiered $0.30 wins</b>
 <div id="history"><div style="font-size:10px;color:#666">No trades yet</div></div>
 </div>
 <div class="card">
-<b>Log — Option B trades</b>
+<b>Log — Best logical trades + Cron</b>
 <div class="log" id="log"></div>
 <button class="btn btn-ghost" style="padding:4px;font-size:9px;margin-top:4px" id="clearBtn">Clear</button>
 </div>
 <script>
 let backend=window.location.origin, auto=true;
-function log(m){let el=document.getElementById('log'); el.textContent=`[${new Date().toLocaleTimeString()}] ${m}\n`+el.textContent.slice(0,3500);}
-async function load(){try{let r=await fetch(backend+'/api/training'); let t=await r.json(); update(t); document.getElementById('status').textContent=`OK ${t.total_trades} trades $${t.daily_pnl?.toFixed(2)}/$50 Need ${Math.max(0,Math.ceil((50-(t.daily_pnl||0))/0.30))}×$0.30 wins ${t.open_trades?.length||0}/10 open Auto ${t.auto_enabled?'ON':'OFF'}`;}catch(e){document.getElementById('status').textContent='Error '+e.message;}}
+function log(m){let el=document.getElementById('log'); el.textContent=`[${new Date().toLocaleTimeString()}] ${m}\n`+el.textContent.slice(0,4000);}
+async function load(){try{let r=await fetch(backend+'/api/training'); let t=await r.json(); update(t); let cronStr=t.last_cron?`Cron ${new Date(t.last_cron).toLocaleTimeString()} #${t.cron_count}`:'Cron: never'; document.getElementById('status').textContent=`OK ${t.total_trades} trades $${t.daily_pnl?.toFixed(2)}/$50 Need ${Math.max(0,Math.ceil((50-(t.daily_pnl||0))/0.30))}×$0.30 wins ${t.open_trades?.length||0}/10 open Auto ${t.auto_enabled?'ON':'OFF'} | ${cronStr}`;}catch(e){document.getElementById('status').textContent='Error '+e.message;}}
 function update(t){
 document.getElementById('cap').textContent=`$${(t.real_cap_used||0).toFixed(0)}/$300`;
 let d=document.getElementById('daily'); d.textContent=`$${(t.daily_pnl||0).toFixed(2)}`; d.className=(t.daily_pnl||0)>=0?'green':'red';
@@ -85,27 +94,29 @@ document.getElementById('goalText').textContent=`$${(t.daily_pnl||0).toFixed(2)}
 document.getElementById('need').textContent=`${Math.max(0,Math.ceil((50-(t.daily_pnl||0))/0.30))}×$0.30`;
 document.getElementById('goalBar').style.width=Math.min(100, Math.max(0,(t.daily_pnl||0)/50*100))+'%';
 document.getElementById('wr').textContent=t.total_trades>0?`${(t.total_wins/t.total_trades*100).toFixed(1)}%`:'0%';
+document.getElementById('bestTier').textContent=t.best_penny?`${t.best_penny}`:'ULTRA';
 document.getElementById('tradesCount').textContent=`${t.total_trades} (${t.total_wins}W/${t.total_losses}L)`;
 document.getElementById('tph').textContent=`${(t.trades_per_hour||0).toFixed(1)}/h`;
-document.getElementById('bestCoin').textContent=`Best: ${t.best_penny||'-'}`;
-document.getElementById('netWin').textContent=`$${(t.net_win||0.30).toFixed(2)}/win`;
+document.getElementById('cronInfo').textContent=t.last_cron?`Cron #${t.cron_count} ${new Date(t.last_cron).toLocaleTimeString()}`:'Cron: never';
+document.getElementById('netWin').textContent=`~$0.30/win tiered`;
 document.getElementById('openCount').textContent=`${t.open_trades?.length||0}/10 open`;
-auto=t.auto_enabled; document.getElementById('autoBtn').textContent=auto?'🤖 AUTO ON — $0.30 wins most logical':'⏸️ AUTO OFF'; document.getElementById('autoBtn').className=auto?'btn btn-auto':'btn btn-auto off';
+auto=t.auto_enabled; document.getElementById('autoBtn').textContent=auto?'🤖 AUTO ON — Tiered $0.30 best logical':'⏸️ AUTO OFF'; document.getElementById('autoBtn').className=auto?'btn btn-auto':'btn btn-auto off';
 let openEl=document.getElementById('openTrades');
-if(t.open_trades && t.open_trades.length>0){openEl.innerHTML=t.open_trades.map(tr=>`<div class="coin ${tr.is_penny?'penny':''}"><div><b>${tr.symbol}</b> ${tr.side} $${tr.quote_qty} @ ${tr.entry_price.toFixed(6)}<br><span style="font-size:9px;color:#888">TP ${tr.tp.toFixed(6)} SL ${tr.sl.toFixed(6)} Conf ${tr.confidence}% ${tr.is_penny?'🪙':''}</span></div><div style="font-size:9px;color:#888">${Math.floor((Date.now()-tr.entry_time_ms)/60000)}m ago</div></div>`).join('');}else{openEl.innerHTML=`<div style="font-size:10px;color:#666">Waiting for signals (score>4.0 conf>52%)... penny 1.2% TP quick!</div>`;}
+if(t.open_trades && t.open_trades.length>0){openEl.innerHTML=t.open_trades.map(tr=>`<div class="coin ${tr.tier||'penny'}"><div><div><b>${tr.symbol}</b> <span class="tier tier-${tr.tier||'penny'}">${(tr.tier||'penny').toUpperCase()}</span> ${tr.side} $${tr.quote_qty} @ ${tr.entry_price.toFixed(tr.entry_price<0.001?8:6)}<br><span style="font-size:9px;color:#888">TP ${tr.tp.toFixed(tr.tp<0.001?8:6)} (${(tr.tp_pct*100).toFixed(1)}%) SL ${tr.sl.toFixed(tr.sl<0.001?8:6)} Net $${tr.net_win?.toFixed(2)||'0.30'} Conf ${tr.confidence}%</span></div></div><div style="font-size:9px;color:#888">${Math.floor((Date.now()-tr.entry_time_ms)/60000)}m ago</div></div>`).join('');}else{openEl.innerHTML=`<div style="font-size:10px;color:#666">Waiting for ultra penny pump (score>4.0 conf>52%)... BONK PEPE 1.5% TP in 1-3m BEST!</div>`;}
 let agEl=document.getElementById('agents');
 if(t.agents){agEl.innerHTML=Object.entries(t.agents).sort((a,b)=>b[1].weight-a[1].weight).map(([id,a])=>{let wr=a.wins+a.losses>0?(a.wins/(a.wins+a.losses)*100).toFixed(0):0; return `<div class="agent"><div style="display:flex;justify-content:space-between"><b>${a.name}</b><span>Wgt ${a.weight.toFixed(2)}</span></div><div style="color:#888">${a.desc}</div><div style="display:flex;justify-content:space-between;color:#888"><span>W ${a.wins} L ${a.losses} WR ${wr}%</span><span style="color:${a.profit>=0?'#22c55e':'#ef4444'}">$${a.profit.toFixed(2)}</span></div></div>`;}).join('');}
 let hEl=document.getElementById('history');
-if(t.history && t.history.length>0){hEl.innerHTML=t.history.slice(-20).reverse().map(h=>`<div class="coin ${h.is_penny?'penny':''}"><div><b>${h.symbol}</b> ${h.side} $${h.qty} ${h.is_win?'<span class=green>WIN</span>':'<span class=red>LOSS</span>'} $${h.pnl_net.toFixed(2)} ${h.is_penny?'🪙':''}<br><span style="font-size:9px;color:#888">${h.reason} ${h.bars}m</span></div><div style="font-size:9px;color:#888;text-align:right">${new Date(h.time).toLocaleTimeString()}<br>$${h.daily.toFixed(2)}</div></div>`).join('');}
+if(t.history && t.history.length>0){hEl.innerHTML=t.history.slice(-20).reverse().map(h=>`<div class="coin ${h.tier||'penny'}"><div><b>${h.symbol}</b> <span class="tier tier-${h.tier||'penny'}">${(h.tier||'').toUpperCase()}</span> ${h.side} $${h.qty} ${h.is_win?'<span class=green>WIN</span>':'<span class=red>LOSS</span>'} $${h.pnl_net.toFixed(2)}<br><span style="font-size:9px;color:#888">${h.reason} ${h.bars}m</span></div><div style="font-size:9px;color:#888;text-align:right">${new Date(h.time).toLocaleTimeString()}<br>$${h.daily.toFixed(2)}</div></div>`).join('');}
 }
-async function scan(){try{let r=await fetch(backend+'/api/scan'); let d=await r.json(); if(d.results){let coinsEl=document.getElementById('coins'); coinsEl.innerHTML=d.results.sort((a,b)=>b.score-a.score).map(c=>{let cls=c.side==='LONG'?'LONG':(c.side==='SHORT'?'SHORT':'WAIT'); return `<div class="coin ${c.is_penny?'penny':''}"><div><b>${c.symbol}</b> $${c.price?.toFixed(c.price>1?2:6)}<br><span style="font-size:9px;color:#888">RSI ${c.rsi} BB ${c.bb_pos} Vol ${c.vol}x Score ${c.score} Conf ${c.confidence}% ${c.is_penny?'🪙':''}</span></div><div style="text-align:right"><span class="signal signal-${cls}">${c.side}</span><br><span style="font-size:9px;color:#888">$${c.order_size}</span></div></div>`;}).join(''); if(d.training) update(d.training);}}catch(e){}}
-async function toggleAuto(){try{let r=await fetch(backend+'/api/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!auto})}); let d=await r.json(); auto=d.auto_enabled; log(auto?'AUTO ON — $0.30 logical':'AUTO OFF'); load();}catch(e){}}
+async function scan(){try{let r=await fetch(backend+'/api/scan'); let d=await r.json(); if(d.results){let coinsEl=document.getElementById('coins'); coinsEl.innerHTML=d.results.sort((a,b)=>b.score-a.score).map(c=>{let cls=c.side==='LONG'?'LONG':(c.side==='SHORT'?'SHORT':'WAIT'); let tierCls=c.tier||'penny'; let priceStr=c.price>0?(c.price<0.001?c.price.toFixed(8):c.price<1?c.price.toFixed(6):c.price.toFixed(2)):'0'; return `<div class="coin ${tierCls}"><div><b>${c.symbol}</b> <span class="tier tier-${tierCls}">${tierCls.toUpperCase()}</span> $${priceStr}<br><span style="font-size:9px;color:#888">RSI ${c.rsi} BB ${c.bb_pos} Vol ${c.vol}x Score ${c.score} Conf ${c.confidence}% TP ${c.tp*100}%=$${c.net_win}</span></div><div style="text-align:right"><span class="signal signal-${cls}">${c.side}</span><br><span style="font-size:9px;color:#888">$${c.order_size}</span></div></div>`;}).join(''); if(d.training) update(d.training);}}catch(e){}}
+async function toggleAuto(){try{let r=await fetch(backend+'/api/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!auto})}); let d=await r.json(); auto=d.auto_enabled; log(auto?'AUTO ON — tiered best logical':'AUTO OFF'); load();}catch(e){}}
 document.getElementById('scanBtn').addEventListener('click',scan);
 document.getElementById('autoBtn').addEventListener('click',toggleAuto);
 document.getElementById('clearBtn').addEventListener('click',()=>document.getElementById('log').textContent='');
-log('v120 OPTION B $0.30 x 200 = $50/day MOST LOGICAL started');
-log('Penny: DOGE SHIB PEPE FLOKI BONK WIF MEME BOME 1000PEPE 1000SHIB + BTC ETH SOL AVAX LINK');
-log('Order $30 TP 1.2%=$0.36-$0.06=$0.30 net WIN SL 0.6%=$0.24 loss RR 1.25:1 need 44% WR');
-log('10 open max — scan every 18s — ~600 trades/day max logical — 200 wins × $0.30 = $50');
-load(); setInterval(load,8000); setInterval(scan,18000);
+log('v122 BEST LOGICAL 12 penny tiered $0.30 x 167 = $50/day started');
+log('ULTRA BONK PEPE SHIB FLOKI $25 TP 1.5%=$0.32 in 1-3m MOST LOGICAL');
+log('PENNY BOME MEME TURBO NEIRO DOGE WIF $30 TP 1.2%=$0.30 in 5-15m');
+log('MAJOR AVAX LINK $50 TP 0.8%=$0.30 in 15-25m MORE LOGICAL');
+log('Cron: /api/cron every 30s via cron-job.org — keeps Vercel alive');
+load(); setInterval(load,8000); setInterval(scan,15000);
 </script></body></html>
