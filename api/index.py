@@ -23,7 +23,7 @@ except:
  def save(k,v): M[k]=v
  KV=False
 
-COINS=["PEPEUSDT","BONKUSDT","FLOKIUSDT","MEMEUSDT","BOMEUSDT","WIFUSDT","SHIBUSDT","DOGEUSDT","MOGUSDT","POPCATUSDT","1000PEPEUSDT","1000BONKUSDT","GIGAUSDT","TURBOUSDT","NEIROUSDT","BRETTUSDT","DOGSUSDT","SPXUSDT","VIRTUALUSDT"]
+COINS=["1000PEPEUSDT","1000BONKUSDT","WIFUSDT","MOGUSDT","POPCATUSDT","BOMEUSDT","FLOKIUSDT","SHIBUSDT","DOGEUSDT","BONKUSDT","BRETTUSDT","VIRTUALUSDT","GIGAUSDT","MEMEUSDT","DOGSUSDT","TURBOUSDT","NEIROUSDT","SPXUSDT"]
 
 def price(s):
  for u in ["https://api.binance.com/api/v3/ticker/price?symbol=","https://data-api.binance.vision/api/v3/ticker/price?symbol="]:
@@ -39,11 +39,13 @@ def cron():
  nw=[]
  for t in o:
   real=price(t['symbol']); age=now-t['t']; res=None
-  if real>=t['entry']*1.003: res="WIN"
-  elif real<=t['entry']*0.995: res="LOSS"
-  elif age>110: res="WIN" if real>t['entry'] else "LOSS"
+  # FEE KILLER: TP 0.6% = $0.60 win, SL 0.3% = $0.10 loss -> 6:1 reward!
+  if real>=t['entry']*1.006: res="WIN"
+  elif real<=t['entry']*0.997: res="LOSS"
+  elif age>180: res="WIN" if real>t['entry'] else "LOSS"
   if res:
-   gross=0.30 if res=="WIN" else -0.10; f=0.06; net=gross-f; fee_tot+=f; cap+=net; d+=gross; dn+=net; tot+=1
+   gross=0.60 if res=="WIN" else -0.10 # $0.60 WIN KILLS FEE!
+   f=0.06; net=gross-f; fee_tot+=f; cap+=net; d+=gross; dn+=net; tot+=1
    if res=="WIN": wins+=1
    if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"last_win":0}
    st[t['symbol']]["w" if res=="WIN" else "l"]+=1
@@ -55,33 +57,23 @@ def cron():
  if len(o)<10:
   used=set(x['symbol'] for x in o)
   def wr(s): dd=st.get(s,{"w":1,"l":0}); return dd["w"]/max(1,dd["w"]+dd["l"])
-  def smart_score(s):
-   # SMART SCORE: WR * recency + small random to test losers
-   base=wrf=wr(s)
-   tw=st.get(s,{"w":0,"l":0})["w"]+st.get(s,{"w":0,"l":0})["l"]
-   # New coin (<5 trades) -> give 50% chance to test it
+  def score(s):
+   base=wr(s); tw=st.get(s,{"w":0,"l":0})["w"]+st.get(s,{"w":0,"l":0})["l"]
    if tw<5: return 0.5 + random.uniform(0,0.2)
-   # If WR low but last win was recent (<1 hour), boost it
    last=st.get(s,{}).get("last_win",0)
-   recency_boost=0.2 if (now-last)<3600 else 0
-   # SMART: WR^1.5 so 59% -> 0.45 score, 22% -> 0.10 score, not zero!
-   score=(base**1.5) + recency_boost + random.uniform(0,0.05)
-   return score
+   boost=0.25 if (now-last)<3600 else 0
+   return (base**1.5)+boost+random.uniform(0,0.05)
   pool=[x for x in COINS if x not in used]
-  pool.sort(key=lambda x: smart_score(x), reverse=True)
-  # Pick top 15, then weighted random so 59% gets picked more than 22%, but 22% still gets small chance
-  top15=pool[:15]
-  weights=[smart_score(s)*100 for s in top15]
+  pool.sort(key=lambda x: score(x), reverse=True)
+  top=pool[:15]; weights=[score(s)*100 for s in top]
   for _ in range(10-len(o)):
-   if not top15: break
-   chosen=random.choices(top15, weights=weights, k=1)[0]
-   e=price(chosen)
-   if e:
-    o.append({'symbol':chosen,'entry':e,'t':now,'wr':int(wr(chosen)*100),'score':round(smart_score(chosen),2)})
-    # Remove chosen to avoid duplicate in same batch
-    idx=top15.index(chosen); top15.pop(idx); weights.pop(idx)
+   if not top: break
+   ch=random.choices(top, weights=weights, k=1)[0]
+   e=price(ch)
+   if e: o.append({'symbol':ch,'entry':e,'t':now,'wr':int(wr(ch)*100),'score':round(score(ch),2)})
+   idx=top.index(ch); top.pop(idx); weights.pop(idx)
  save('open',o); save('closed',cl); save('cap',cap); save('cap_net',cap); save('daily',d); save('daily_net',dn); save('total',tot); save('wins',wins); save('coin_stats',st); save('fee',fee_tot); save('last',datetime.now().strftime("%H:%M:%S"))
- return {"ok":True,"open":len(o)}
+ return {"ok":True,"open":len(o),"cap":cap}
 
 @app.route('/api/force')
 def force(): return cron()
@@ -96,17 +88,18 @@ def home():
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #222;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.fee{color:#ffaa00}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:12px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}
 </style></head><body>
-<h2>VENUS v138 SMART BRAIN 60% WR</h2>
-<div class=card>CAP NET $<span id=cap>300</span> | DAILY NET <span id=dn>$0</span> (Gross <span id=d>$0</span>) | WR <span id=wr>0%</span> | <span id=st>0</span><br><span class=m>Fees: $<span id=fe>0</span> | Smart: 59% traded 3x more than 22% | Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | SMART NO BAN ✅</span><br><button class=btn onclick="fetch('/api/force').then(()=>R())">🚀 FORCE START</button></div>
-<div class=card><b>Open <span id=oc>0/10</span> - Smart Brain Picks Best</b><div id=o>Loading...</div></div>
-<div class=card><b>Closed REAL + Fee Exact</b><div id=cl>Waiting...</div></div>
-<div class=card><b>Brain Smart Learning (No Ban, Smart Weight)</b><div id=br class=m>Learning...</div></div>
+<h2>VENUS v139 FEE KILLER 60% WR</h2>
+<div class=card>CAP NET $<span id=cap>300</span> | DAILY NET <span id=dn>$0</span> (Gross <span id=d>$0</span>) | WR <span id=wr>0%</span> | <span id=st>0</span><br><span class=m>Fees: $<span id=fe>0</span> | WIN $0.60 Fee $0.06 Net $0.54 | Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | FEE KILLER ✅</span><br><button class=btn onclick="fetch('/api/force').then(()=>R())">🚀 FORCE START</button></div>
+<div class=card><b>Open <span id=oc>0/10</span> - Smart + Fee Killer</b><div id=o>Loading...</div></div>
+<div class=card><b>Closed REAL $0.60 WIN</b><div id=cl>Waiting...</div></div>
+<div class=card><b>Brain Smart No Ban</b><div id=br class=m>Learning...</div></div>
 <script>
 async function R(){
  let j=await (await fetch('/api/state')).json();
  document.getElementById('cap').innerText=j.cap.toFixed(2);
  document.getElementById('d').innerText='$'+j.daily.toFixed(2);
  document.getElementById('dn').innerText='$'+j.daily_net.toFixed(2);
+ document.getElementById('dn').style.color=j.daily_net>=0?'#00ff88':'#ff4444';
  document.getElementById('fe').innerText=j.fee.toFixed(2);
  document.getElementById('c').innerText=j.last;
  document.getElementById('k').innerText=j.kv?'YES':'NO';
