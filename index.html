@@ -1,133 +1,233 @@
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VENUS v113 REAL NO FAKE 99% WIN BOTH WAYS FIXED</title>
+<title>VENUS v115 - Simple Paper Trading Trainer</title>
 <style>
-:root{--orange:#FF7A00;--green:#22c55e}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#050507;color:#fff;font-family:monospace;min-height:100vh;padding-bottom:80px}
-.header{position:sticky;top:0;background:#000;border-bottom:1px solid #222;padding:12px;display:flex;justify-content:space-between}
-.logo{font-weight:900;font-size:11px}.logo span{color:var(--orange)}
-.badge{font-size:9px;padding:4px 8px;border-radius:999px;background:#111;border:1px solid #333}
-.badge.paper{background:rgba(255,122,0,0.18);border-color:var(--orange);color:var(--orange)}
-.card{margin:10px;border-radius:14px;background:#0a0a0a;border:1px solid #222;padding:12px}
-.big{font-size:22px;font-weight:900}
-.btn{width:100%;padding:10px;border-radius:10px;border:0;font-weight:900;cursor:pointer;background:var(--orange);color:#000;font-size:12px}
-.btn.real{background:var(--green)}
-.btn.secondary{background:#222;color:#fff;border:1px solid #333}
-.coin{padding:6px;border-radius:8px;background:#111;border:1px solid #222;font-size:10px;margin:3px 0}
-.coin.LONG{border-color:var(--green);background:rgba(34,197,94,0.15)}
-.coin.SHORT{border-color:#ef4444;background:rgba(239,68,68,0.15)}
-.log{height:140px;overflow:auto;background:#000;border-radius:8px;padding:8px;font-size:9px;white-space:pre-wrap;border:1px solid #222}
+body{background:#0a0a0b;color:#e5e5e5;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:12px;max-width:800px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:4px} .sub{font-size:12px;color:#888;margin-bottom:16px}
+.card{background:#161617;border:1px solid #2a2a2a;border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.stat{flex:1;min-width:90px}
+.stat label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:2px}
+.stat b{font-size:18px;font-weight:700}
+.green{color:#22c55e} .red{color:#ef4444} .orange{color:#f97316}
+.btn{width:100%;padding:12px;border-radius:10px;border:0;font-weight:600;cursor:pointer;font-size:14px;margin-top:8px}
+.btn-primary{background:#fff;color:#000}
+.btn-long{background:#22c55e;color:#000}
+.btn-short{background:#ef4444;color:#fff}
+.btn-ghost{background:#1f1f20;color:#e5e5e5;border:1px solid #2a2a2a}
+.coin{display:flex;justify-content:space-between;align-items:center;padding:10px;background:#1c1c1d;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:6px;font-size:13px}
+.coin .signal{font-size:11px;padding:3px 8px;border-radius:999px;font-weight:600}
+.signal-LONG{background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)}
+.signal-SHORT{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)}
+.signal-WAIT{background:rgba(100,100,100,0.15);color:#888;border:1px solid #333}
+.log{height:160px;overflow:auto;background:#000;border-radius:8px;padding:10px;font-family:monospace;font-size:11px;white-space:pre-wrap;border:1px solid #222;line-height:1.4}
+.agent{display:flex;justify-content:space-between;padding:8px;background:#1c1c1d;border-radius:8px;margin-bottom:6px;font-size:12px}
+.progress{height:4px;background:#222;border-radius:2px;margin-top:4px} .progress-bar{height:100%;border-radius:2px;background:#22c55e}
 </style></head><body>
-<div class="header">
-<div class="logo">VENUS <span>v113 REAL NO FAKE 99% BOTH WAYS FIXED</span><br><span style="font-size:8px;opacity:.6">7 AGENTS 15 BEST MOAT $300 CAP $100=$3.50->$3 NET LONG+SHORT 99% REAL PAPER NO FAKE - FIXED</span></div>
-<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end">
-<div class="badge paper">REAL PAPER 99% BOTH v113 FIXED</div>
-<div class="badge" id="capBadge">Cap $300 | $100->$3 net | 15c | 99% WR | Both | Real v113</div>
-</div></div>
 
-<div class="card" style="border-color:var(--green)">
+<h1>VENUS v115</h1>
+<div class="sub">Simple paper trading trainer — real market, fake money, real learning. Train agents before real funds.</div>
+
+<div class="card">
+<div class="row">
+<div class="stat"><label>Paper Balance</label><b id="balance">$300</b></div>
+<div class="stat"><label>Used / Cap</label><b id="used">$0 / $300</b></div>
+<div class="stat"><label>Daily P&L</label><b id="daily" class="green">$0.00</b></div>
+<div class="stat"><label>Win Rate</label><b id="wr">0%</b></div>
+</div>
+<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:#888">
+<div>Gross win: $3.50 (3.5%) | Fee: $0.20 | Net: $3.30</div>
+<div>Loss: -$1.20 (1% + fee) | Goal: $400 | 3 slots max</div>
+</div>
+</div>
+
+<div class="card">
+<div style="font-weight:600;margin-bottom:8px">What happens when you click BUY?</div>
+<div style="font-size:12px;color:#aaa;line-height:1.5">
+1. We record price now (e.g. BTC $65000) from real Binance<br>
+2. We set Target +3.5% ($67275) and Stop -1% ($64350)<br>
+3. Every 30s we check real market: did price hit target or stop?<br>
+4. If target → WIN +$3.30 net. If stop → LOSS -$1.20 net<br>
+5. Winning agents get stronger (weight +0.05). Losing get weaker (-0.03)<br>
+6. After 100+ trades, best agents emerge. Then use real money.
+</div>
+</div>
+
+<div class="card">
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-<div><div style="font-size:8px;opacity:.6">REAL NO FAKE - 15 COINS 99% WIN BOTH WAYS PAPER v113</div><div class="big" id="realBal">$300 LOCKED REAL PAPER 99% v113</div><div style="font-size:9px" id="pnlDetail">$100 LONG/SHORT REAL - TP 3.5%=$3.50-$0.20 fee=$3 net - 99% accurate - Real Binance testnet fills - FIXED</div></div>
-<div><div style="font-size:8px;opacity:.6">7 AGENTS 99% WIN BOTH LONG SHORT v113</div><div style="font-size:11px;font-weight:700" id="connStatus">Checking REAL 99% paper v113...</div><div style="font-size:9px" id="trainingStats">Trades:0 | Daily:$0/$300 | 99% WR | Both | v113</div></div>
+<button class="btn btn-long" id="longBtn">BUY LONG $100 → Target +3.5%</button>
+<button class="btn btn-short" id="shortBtn">SELL SHORT $100 → Target -3.5%</button>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-top:8px;padding:8px;background:#000;border-radius:8px;border:1px solid #222">
-<div><div style="font-size:7px;opacity:.6">VOL REAL 15c</div><div style="font-size:11px;font-weight:700" id="volTraded">$0.00 REAL</div></div>
-<div><div style="font-size:7px;opacity:.6">FEES $0.20 Deducted</div><div style="font-size:11px;font-weight:700;color:#ef4444" id="feesPaid">$0.00 FEE</div></div>
-<div><div style="font-size:7px;opacity:.6">GROSS $3.50 REAL</div><div style="font-size:11px;font-weight:700;color:var(--green)" id="grossWin">$3.50 REAL</div></div>
-<div><div style="font-size:7px;opacity:.6">NET $3 After Fee 99%</div><div style="font-size:11px;font-weight:700;color:var(--green)" id="pnlAfterFee">$3.30 NET</div></div>
+<button class="btn btn-ghost" id="scanBtn">🔍 SCAN 15 COINS — find LONG/SHORT signals</button>
+<button class="btn btn-ghost" id="autoBtn">🤖 AUTO: OFF — auto-trade signals</button>
+<button class="btn btn-ghost" id="checkBtn">✅ CHECK OPEN TRADES — did real market hit TP/SL?</button>
+<div style="font-size:11px;color:#666;margin-top:8px" id="status">Connecting to backend...</div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:6px">
-<div style="padding:5px;background:rgba(34,197,94,0.1);border-radius:6px;border:1px solid rgba(34,197,94,0.2)"><div style="font-size:7px">WINS/LOSSES/TOTAL 99% REAL v113</div><div style="font-size:10px" id="winLoss">99W 1L 100T REAL</div><div style="font-size:7px" id="winRate">WR 99% Both LONG SHORT v113</div></div>
-<div style="padding:5px;background:rgba(255,122,0,0.1);border-radius:6px;border:1px solid rgba(255,122,0,0.2)"><div style="font-size:7px">CAP $300 REAL PAPER 15c v113</div><div style="font-size:10px" id="capUsed">$0 / $300 REAL</div><div style="font-size:7px">3 slots $100 both ways real</div></div>
-<div style="padding:5px;background:rgba(100,100,255,0.1);border-radius:6px;border:1px solid rgba(100,100,255,0.2)"><div style="font-size:7px">REAL DAILY 99% to $400 GOAL v113</div><div style="font-size:10px" id="goalProgress">$0 / $400 REAL</div><div style="font-size:7px" id="dailyPnl">$0 / $300 day 100 trades $3 net 99%</div></div>
+
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<b>Open Trades (waiting for real market)</b><span id="openCount" style="font-size:11px;color:#888">0 open</span>
 </div>
-<div style="display:grid;grid-template-columns:1fr;gap:6px;margin-top:10px">
-<button class="btn real" id="autoBtn">AUTO REAL 99% WIN BOTH WAYS v113: OFF - $100 LONG/SHORT $3.50->$3 net Real No Fake FIXED</button>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-<button class="btn" id="forceBtn">FORCE $100 REAL LONG 99% WIN $3.50->$3 NET v113</button>
-<button class="btn secondary" id="forceShortBtn" style="background:#ef4444;color:#fff">FORCE $100 REAL SHORT 99% WIN $3.50->$3 NET v113</button>
+<div id="openTrades"><div style="font-size:12px;color:#666">No open trades. Click BUY LONG or SELL SHORT to start.</div></div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-<button class="btn secondary" id="testBtn">TEST REAL PAPER 99% BACKEND 15 COINS BOTH v113 FIXED</button>
-<button class="btn secondary" id="scanBtn">SCAN 15 COINS BOTH WAYS REAL v113</button>
+
+<div class="card">
+<b>15 Coins — Real Market Signals</b>
+<div style="font-size:11px;color:#888;margin:4px 0 8px">RSI = momentum, BB = volatility, Vol = volume. Score >4 = strong signal.</div>
+<div id="coins"><div style="font-size:12px;color:#666">Click SCAN to load real market data...</div></div>
 </div>
+
+<div class="card">
+<b>7 Agents — Learning</b>
+<div style="font-size:11px;color:#888;margin:4px 0 8px">Weight = how much we trust this agent. Wins increase weight.</div>
+<div id="agents"><div style="font-size:12px;color:#666">Loading agents...</div></div>
 </div>
+
+<div class="card">
+<b>Trade History (real outcomes)</b>
+<div id="history"><div style="font-size:12px;color:#666">No trades yet.</div></div>
 </div>
-<div class="card"><div style="font-size:11px;font-weight:700">7 AGENTS 99% WIN BOTH WAYS SMART LONG SHORT REAL NO FAKE v113 FIXED</div><div id="agentsGrid" style="margin-top:6px;display:grid;grid-template-columns:1fr;gap:5px"></div></div>
-<div class="card"><div style="font-size:11px;font-weight:700">15 BEST MOAT COINS - BOTH LONG SHORT 99% REAL NO FAKE v113 FIXED</div><div id="coinsGrid" style="margin-top:6px;max-height:500px;overflow:auto"></div></div>
-<div class="card"><div style="font-size:11px;font-weight:700">REAL TRADING LOG NO FAKE v113 - 99% WIN $3.50->$3 NET BOTH WAYS</div><div class="log" id="log"></div><button class="btn secondary" style="margin-top:6px;padding:6px;font-size:9px" id="clearBtn">CLEAR LOG v113</button></div>
-<div class="card"><div style="font-size:11px;font-weight:700">RECENT REAL TRADES NO FAKE v113</div><div id="tradesList" style="margin-top:6px;max-height:180px;overflow:auto;font-size:9px"></div></div>
+
+<div class="card">
+<b>Log</b>
+<div class="log" id="log"></div>
+<button class="btn btn-ghost" style="padding:6px;font-size:11px;margin-top:6px" id="clearBtn">Clear log</button>
+</div>
+
 <script>
-let backendUrl = window.location.origin;
-let autoReal = false;
-let trainingState = {total_trades:0,total_wins:0,daily_pnl:0,real_cap_used:0,total_gross:0,total_net:0};
-function log(msg){let el=document.getElementById("log");el.textContent+="["+new Date().toLocaleTimeString()+"] "+msg+"\n";el.scrollTop=el.scrollHeight;}
-async function testBackend(){
-  try{
-    let r=await fetch(backendUrl+"/api/balance");
-    let data=await r.json();
-    document.getElementById("realBal").textContent="$300 LOCKED REAL PAPER 99% 15 COINS BOTH v113 FIXED (Testnet $"+(data.balances?.USDT?.free||10000)+" but $300 cap)";
-    document.getElementById("connStatus").textContent="REAL PAPER 99% WIN BOTH WAYS OK v113 FIXED - 15 COINS - $300 CAP";
-    document.getElementById("capBadge").textContent="Real Paper $300 | $100 LONG/SHORT->$3 net | 15c | 99% WR | Both | v113 FIXED";
-    if(data.training) updateTraining(data.training);
-    log("REAL TRADING NO FAKE v113 FIXED Paper backend OK 99% win both ways 15 coins - $300 cap - $100 LONG/SHORT = $3.50 win = $3 net after $0.20 fee - 99% accurate");
-    scanAll();
-  }catch(e){document.getElementById("connStatus").textContent=""+e.message;log("Backend failed "+e.message);}
+let backend = window.location.origin;
+let training = null;
+let auto = false;
+function log(m){
+  let el=document.getElementById('log');
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${m}\n` + el.textContent.slice(0,3000);
 }
-function updateTraining(t){
-  trainingState=t;
-  document.getElementById("volTraded").textContent="$"+(t.total_volume||0).toFixed(2)+" REAL PAPER 15c v113";
-  document.getElementById("feesPaid").textContent="$"+(t.total_fees||0).toFixed(2)+" REAL FEE v113";
-  document.getElementById("grossWin").textContent="$"+(t.total_gross||0).toFixed(2)+" gross";
-  document.getElementById("pnlAfterFee").textContent="$"+(t.total_net||0).toFixed(2)+" net";
-  let wr = t.total_trades>0? (t.total_wins/t.total_trades*100).toFixed(1) : 99;
-  document.getElementById("winLoss").textContent=t.total_wins+"W "+t.total_losses+"L "+t.total_trades+"T REAL 99% BOTH v113";
-  document.getElementById("winRate").textContent="WR "+wr+"% Both LONG SHORT v113";
-  document.getElementById("capUsed").textContent="$"+(t.real_cap_used||0).toFixed(0)+" / $300 REAL v113";
-  document.getElementById("dailyPnl").textContent="$"+(t.daily_pnl||0).toFixed(2)+" / $300 day";
-  document.getElementById("goalProgress").textContent="$"+(t.total_net||0).toFixed(2)+" / $400 REAL v113";
-  document.getElementById("trainingStats").textContent="Trades:"+t.total_trades+" Daily:$"+(t.daily_pnl||0).toFixed(2)+"/$300 WR "+wr+"% Goal $"+(t.total_net||0).toFixed(2)+"/$400";
-  let agDiv=document.getElementById("agentsGrid");
-  if(t.agents){agDiv.innerHTML=Object.entries(t.agents).map(([k,a])=>"<div class='coin' style='display:flex;justify-content:space-between'><div><b>"+(a.full||a.name)+" 99% WIN v113</b><br><span style='opacity:.6;font-size:8px'>"+a.strategy+" W:"+(a.wins||0)+" L:"+(a.losses||0)+"</span></div><div>Wt:"+(a.weight||1).toFixed(2)+"</div></div>").join("");}
-  let trDiv=document.getElementById("tradesList");
-  if(t.history&&t.history.length>0){trDiv.innerHTML=t.history.slice(-15).reverse().map(h=>"<div style='padding:3px;border-bottom:1px solid #222;display:flex;justify-content:space-between'><span>"+h.time.split('T')[1].split('.')[0]+" "+h.symbol+" "+(h.is_win?"WIN 99% $3.50->$3 NET BOTH v113":"LOSS 1% v113")+" $"+(h.pnl_net||0).toFixed(2)+"</span><span style='opacity:.6'>"+(h.voters?h.voters.slice(0,2).join(','):'')+"</span></div>").join("");}
-}
-async function scanAll(){
+async function load(){
   try{
-    let r=await fetch(backendUrl+"/api/scan");
-    let data=await r.json();
-    if(data.results){
-      let grid=document.getElementById("coinsGrid");
-      grid.innerHTML=data.results.map(c=>{let cls=c.side=="LONG"?"coin LONG":(c.side=="SHORT"?"coin SHORT":"coin");return "<div class='"+cls+"'><div style='display:flex;justify-content:space-between'><b>"+c.symbol+"</b><span>"+(c.side=="LONG"?"LONG 99% $3.50->$3 NET v113":(c.side=="SHORT"?"SHORT 99% $3.50->$3 NET v113":"WAIT v113"))+"</span></div><div>RSI "+c.rsi+" BB "+c.bb_pos+" Vol "+c.vol+"x Votes L:"+c.votes_long+" S:"+c.votes_short+" Score "+c.score+"</div><div style='opacity:.6;font-size:8px'>"+(c.voters?c.voters.join(','):'')+"</div></div>";}).join("");
-      if(data.training) updateTraining(data.training);
-      let longs=data.results.filter(x=>x.side!="WAIT");
-      if(longs.length>0){log("*** "+longs.length+" REAL SIGNALS BOTH WAYS 99% WIN $3.50->$3 NET 15 COINS v113 FIXED: "+longs.map(x=>x.symbol+" "+x.side).join(',')+" ***"); if(autoReal){for(let coin of longs.slice(0,3)){await placeRealOrder(coin, coin.side); await new Promise(r=>setTimeout(r,800));}}}
+    let r=await fetch(backend+'/api/training');
+    let t=await r.json();
+    training=t;
+    update(t);
+    document.getElementById('status').textContent = `Backend OK • ${t.total_trades} trades • ${t.daily_pnl?.toFixed(2) || 0} daily • Real training v115`;
+    log(`Loaded: ${t.total_trades} trades, daily $${t.daily_pnl?.toFixed(2)}, ${t.open_trades?.length||0} open`);
+  }catch(e){
+    document.getElementById('status').textContent = 'Backend error: '+e.message;
+    log('Backend failed '+e.message);
+  }
+}
+function update(t){
+  document.getElementById('balance').textContent = `$${(300 - (t.real_cap_used||0)).toFixed(0)} available`;
+  document.getElementById('used').textContent = `$${(t.real_cap_used||0).toFixed(0)} / $300`;
+  let daily=document.getElementById('daily');
+  daily.textContent = `$${(t.daily_pnl||0).toFixed(2)}`;
+  daily.className = (t.daily_pnl||0)>=0 ? 'green' : 'red';
+  document.getElementById('wr').textContent = t.total_trades>0 ? `${(t.total_wins/t.total_trades*100).toFixed(1)}% (${t.total_wins}W/${t.total_trades})` : '0%';
+  document.getElementById('openCount').textContent = `${t.open_trades?.length||0} open`;
+  let openEl=document.getElementById('openTrades');
+  if(t.open_trades && t.open_trades.length>0){
+    openEl.innerHTML = t.open_trades.map(tr=>`
+      <div class="coin">
+        <div><b>${tr.symbol}</b> ${tr.side} @ ${tr.entry_price.toFixed(2)}<br>
+        <span style="font-size:11px;color:#888">TP ${tr.tp_price.toFixed(2)} SL ${tr.sl_price.toFixed(2)} | ${tr.voters.join(', ')}</span></div>
+        <div style="text-align:right;font-size:11px;color:#888">${Math.floor((Date.now()-tr.entry_time_ms)/60000)}m ago<br>waiting...</div>
+      </div>
+    `).join('');
+  } else {
+    openEl.innerHTML = `<div style="font-size:12px;color:#666">No open trades. Click BUY LONG or SELL SHORT to start.</div>`;
+  }
+  let agEl=document.getElementById('agents');
+  if(t.agents){
+    agEl.innerHTML = Object.entries(t.agents).map(([id,a])=>{
+      let wr = a.wins+a.losses>0 ? (a.wins/(a.wins+a.losses)*100).toFixed(1) : 0;
+      return `<div class="agent">
+        <div><b>${a.name}</b> — ${a.desc}<br><span style="color:#888">W ${a.wins} L ${a.losses} WR ${wr}%</span></div>
+        <div style="text-align:right">Weight ${a.weight.toFixed(2)}<div class="progress"><div class="progress-bar" style="width:${Math.min(100, a.weight*50)}%"></div></div></div>
+      </div>`;
+    }).join('');
+  }
+  let hEl=document.getElementById('history');
+  if(t.history && t.history.length>0){
+    hEl.innerHTML = t.history.slice(-10).reverse().map(h=>`
+      <div class="coin">
+        <div><b>${h.symbol}</b> ${h.side} ${h.is_win?'<span class=green>WIN</span>':'<span class=red>LOSS</span>'} $${h.pnl_net.toFixed(2)}<br>
+        <span style="font-size:11px;color:#888">${h.reason||''} ${h.bars?`in ${h.bars}m`:''}</span></div>
+        <div style="font-size:11px;color:#888;text-align:right">${new Date(h.time).toLocaleTimeString()}<br>${h.voters?.slice(0,2).join(',')||''}</div>
+      </div>
+    `).join('');
+  }
+}
+async function scan(){
+  log('Scanning 15 coins from real Binance...');
+  document.getElementById('status').textContent='Scanning real market...';
+  try{
+    let r=await fetch(backend+'/api/scan');
+    let d=await r.json();
+    if(d.results){
+      let coinsEl=document.getElementById('coins');
+      coinsEl.innerHTML = d.results.map(c=>{
+        let sigClass = c.side==='LONG'?'LONG':(c.side==='SHORT'?'SHORT':'WAIT');
+        return `<div class="coin">
+          <div><b>${c.symbol}</b> $${c.price?.toFixed(2)||''}<br>
+          <span style="font-size:11px;color:#888">RSI ${c.rsi} BB ${c.bb_pos} Vol ${c.vol}x Score ${c.score}</span></div>
+          <div style="text-align:right"><span class="signal signal-${sigClass}">${c.side}</span><br>
+          <span style="font-size:10px;color:#666">${c.votes_long?.toFixed(1)}L / ${c.votes_short?.toFixed(1)}S</span></div>
+        </div>`;
+      }).join('');
+      if(d.training) update(d.training);
+      let signals = d.results.filter(x=>x.side!=='WAIT');
+      log(`Found ${signals.length} signals: ${signals.map(s=>s.symbol+' '+s.side).join(', ') || 'none — wait for better market'}`);
+      if(auto && signals.length>0){
+        for(let s of signals.slice(0,2)){
+          await placeOrder(s, s.side);
+          await new Promise(r=>setTimeout(r,800));
+        }
+      }
     }
-  }catch(e){log("Scan failed "+e.message+" - v113");}
+    document.getElementById('status').textContent=`Scanned ${d.results?.length||0} coins • BTC trend ${d.btc_up?'UP':'DOWN'}`;
+  }catch(e){log('Scan failed '+e.message); document.getElementById('status').textContent='Scan failed '+e.message}
 }
-async function placeRealOrder(coin, side="LONG"){
+async function placeOrder(coin, side){
   try{
-    log("REAL PAPER REAL ORDER $100 "+coin.symbol+" "+side+" to TP 3.5%=$3.50-$0.20 fee=$3.30 net Cap $"+(trainingState.real_cap_used||0)+"/$300 v113");
-    let r=await fetch(backendUrl+"/api/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol:coin.symbol,side:side,quoteOrderQty:100})});
+    log(`Placing PAPER order $100 ${coin.symbol} ${side} @ ${coin.price||'market'} — will track real market for TP +3.5% / SL -1%`);
+    let r=await fetch(backend+'/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:coin.symbol, side:side, quoteOrderQty:100, voters:coin.voters||['renaissance','citadel']})});
     let data=await r.json();
-    if(!r.ok) throw new Error(JSON.stringify(data).slice(0,200));
-    log("REAL PAPER 99% FILLED v113 "+coin.symbol+" "+side+" Id "+data.order.orderId+" v113");
-    setTimeout(async()=>{
-      let isWin = Math.random() > 0.01;
-      let gross=isWin?3.5:-1; let net=isWin?3.3:-1.2;
-      let rr=await fetch(backendUrl+"/api/training",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({is_win:isWin,pnl_gross:gross,pnl_net:net,symbol:coin.symbol,voters:coin.voters})});
-      let td=await rr.json(); updateTraining(td);
-      log((isWin?"REAL 99% WIN BOTH WAYS v113":"LOSS 1% v113")+" "+coin.symbol+" "+side+" Gross $"+gross+" Net $"+net+" v113 Daily $"+td.daily_pnl.toFixed(2)+"/$300");
-    },3000);
-  }catch(e){log("Order "+coin.symbol+": "+e.message+" - v113");}
+    if(!r.ok) throw new Error(data.error||JSON.stringify(data).slice(0,200));
+    log(`Order OPEN: ${coin.symbol} ${side} entry ${data.order.entry_price} TP ${data.order.tp.toFixed(2)} SL ${data.order.sl.toFixed(2)} Id ${data.order.orderId} — waiting for real market...`);
+    let rr=await fetch(backend+'/api/training'); let t=await rr.json(); update(t);
+  }catch(e){log('Order failed '+e.message)}
 }
-document.getElementById("testBtn").addEventListener("click",testBackend);
-document.getElementById("scanBtn").addEventListener("click",scanAll);
-document.getElementById("forceBtn").addEventListener("click",async()=>{await placeRealOrder({symbol:"BTCUSDT",price:60000,voters:["renaissance","citadel"]}, "LONG");});
-document.getElementById("forceShortBtn").addEventListener("click",async()=>{await placeRealOrder({symbol:"BTCUSDT",price:60000,voters:["citadel","bridgewater"]}, "SHORT");});
-document.getElementById("autoBtn").addEventListener("click",()=>{autoReal=!autoReal;let b=document.getElementById("autoBtn");b.textContent=autoReal?"AUTO REAL 99% WIN BOTH WAYS v113: ON - $100 LONG/SHORT $3.50->$3 net (max $300 cap) 15 coins v113 FIXED":"AUTO REAL 99% WIN BOTH WAYS v113: OFF - Tap $100 LONG/SHORT $3.50->$3 net 15 coins v113 FIXED";b.style.background=autoReal?"linear-gradient(135deg,#22c55e,#86efac)":"";log(autoReal?"AUTO REAL v113 FIXED ENABLED - $100=$3.50 gross $3 net after $0.20 fee deducted, 3 slots $300 cap, 100 trades/day=$300/day net":"DISABLED PAPER 99% BOTH v113");});
-document.getElementById("clearBtn").addEventListener("click",()=>{document.getElementById("log").textContent="";});
-log("VENUS v113 REAL NO FAKE 99% WIN BOTH WAYS FIXED - 7 AGENTS 15 BEST MOAT COINS $300 CAP $3.50 WIN = $3 NET AFTER FEE - PAPER MONEY REAL BEFORE REAL FUNDS - FIXED SYNTAX ERROR started");
-testBackend(); setInterval(scanAll,60000);
+async function checkOutcomes(){
+  log('Checking open trades — did real market hit TP or SL?');
+  try{
+    let r=await fetch(backend+'/api/check_outcomes',{method:'POST'});
+    let d=await r.json();
+    log(`Checked ${d.checked.length} open trades:`);
+    d.checked.forEach(c=>{
+      if(c.outcome && c.outcome.result!=='ERROR'){
+        log(`  ${c.symbol} ${c.side}: ${c.outcome.result} — ${c.outcome.reason||''} ${c.outcome.bars||0}m ago`);
+      } else if(c.outcome){
+        log(`  ${c.symbol}: still open, no TP/SL hit yet`);
+      }
+    });
+    if(d.checked.some(c=>c.outcome && (c.outcome.result==='WIN'||c.outcome.result==='LOSS'))){
+      let rr=await fetch(backend+'/api/training'); let t=await rr.json(); update(t);
+      log(`Updated! Daily P&L $${t.daily_pnl.toFixed(2)} Win rate ${t.total_trades>0?(t.total_wins/t.total_trades*100).toFixed(1):0}%`);
+    }
+  }catch(e){log('Check failed '+e.message)}
+}
+document.getElementById('longBtn').addEventListener('click',()=>placeOrder({symbol:'BTCUSDT', price:0, voters:['renaissance','citadel']}, 'LONG'));
+document.getElementById('shortBtn').addEventListener('click',()=>placeOrder({symbol:'BTCUSDT', price:0, voters:['citadel','bridgewater']}, 'SHORT'));
+document.getElementById('scanBtn').addEventListener('click',scan);
+document.getElementById('checkBtn').addEventListener('click',checkOutcomes);
+document.getElementById('autoBtn').addEventListener('click',()=>{
+  auto=!auto;
+  document.getElementById('autoBtn').textContent = auto ? '🤖 AUTO: ON — trading signals automatically' : '🤖 AUTO: OFF — auto-trade signals';
+  log(auto?'Auto ON — will trade top 2 signals on each scan':'Auto OFF');
+});
+document.getElementById('clearBtn').addEventListener('click',()=>document.getElementById('log').textContent='');
+log('VENUS v115 SIMPLE started — real market paper trading trainer');
+log('How it works: Click BUY LONG → we record real price → wait for real market to hit +3.5% or -1% → real win/loss → agents learn');
+load();
+setInterval(load, 30000);
 </script></body></html>
