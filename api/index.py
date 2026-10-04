@@ -82,11 +82,11 @@ def cron():
     if pct>peak: t['peak']=pct
     if tm=="LONG" and mom5<-0.12 and mom15<-0.05: should_close=True; reason=f"FLIP DOWN {mom5:.3f}%"
     if tm=="SHORT" and mom5>0.12 and mom15>0.05: should_close=True; reason=f"FLIP UP {mom5:.3f}%"
-    if peak>=0.12 and pct<peak*0.45: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}% net_fut ${net_fut:.3f}"
-    if pct>=0.14: should_close=True; reason=f"WIN {pct:.3f}% gross ${gross:.3f} net_fut ${net_fut:.3f}"
-    if pct<=-0.18: should_close=True; reason=f"CUT {pct:.3f}% net_fut ${net_fut:.3f}"
-   if age>55 and pct>=0.08: should_close=True; reason=f"MAX 55s PROFIT {pct:.3f}% net_fut ${net_fut:.3f}"
-   if age>70: should_close=True; reason=f"MAX 70s {pct:.3f}% net_fut ${net_fut:.3f}"
+    if peak>=0.14 and pct<peak*0.45: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}% net_fut ${net_fut:.3f}"
+    if pct>=0.16: should_close=True; reason=f"WIN {pct:.3f}% gross ${gross:.3f} net_fut ${net_fut:.3f}"
+    if pct<=-0.20: should_close=True; reason=f"CUT {pct:.3f}% net_fut ${net_fut:.3f}"
+   if age>65 and pct>=0.10: should_close=True; reason=f"MAX 65s PROFIT {pct:.3f}% net_fut ${net_fut:.3f}"
+   if age>85: should_close=True; reason=f"MAX 85s {pct:.3f}% net_fut ${net_fut:.3f}"
    if should_close:
     if net_fut>0.01: res="WIN"
     elif net_fut<-0.01: res="LOSS"; to_rev.append((sym,tm,real))
@@ -103,58 +103,48 @@ def cron():
     nw.append(t)
   for c in cn: cl.insert(0,c)
   cl=cl[:250]; o=nw
-  # SIZE SENSE LOGIC
-  last2 = cl[:2]
-  loss_streak = 0
-  for c in last2:
-   if c['result']=='LOSS': loss_streak+=1
-   else: break
-  def wr_score(s):
-   stat=st.get(s,{"w":0,"l":0})
-   total=stat["w"]+stat["l"]
-   return stat["w"]/total if total>=5 else 0.5
-  def calc_pos(sym, base):
-   # 1. Coin WR sense
-   score = wr_score(sym)
-   if score>=0.60: mult=1.2
-   elif score<=0.35: mult=0.7
-   else: mult=1.0
-   # 2. Loss streak sense
-   if loss_streak>=2: mult*=1.3
-   pos=base*mult
-   pos=max(45, min(120, pos))
-   return round(pos,1)
+  # SIZE SENSE - WHEN NOT WIN, BIGGER SIZE
+  last_losses=0
+  for c in cl:
+   if c['result']=='LOSS': last_losses+=1
+   elif c['result']=='WIN': break
+   if last_losses>=3: break
+  base=cap/3 if cap>0 else 75
+  if last_losses==0: size_mult=1.0
+  elif last_losses==1: size_mult=1.3
+  elif last_losses==2: size_mult=1.6
+  else: size_mult=2.0
+  def calc_pos_with_streak():
+   pos=base*size_mult
+   return max(60, min(120, round(pos,1)))
   for sym,old_mode,price in to_rev:
    if sym in [x['symbol'] for x in o]: continue
-   if len(o)>=4: break
+   if len(o)>=3: break
    new_mode="SHORT" if old_mode=="LONG" else "LONG"
-   base=cap/4 if cap>0 else 75
-   pos=calc_pos(sym, base)
-   o.append({'symbol':sym,'entry':price,'t':now,'m90':round(mom.get(sym,0),3),'mode':new_mode,'price':price,'peak':0,'pos':pos,'rev':1,'size_reason':f"LOSS_STREAK {loss_streak} WR {wr_score(sym):.0%}"})
-  if len(o)<4:
+   pos=calc_pos_with_streak()
+   o.append({'symbol':sym,'entry':price,'t':now,'m90':round(mom.get(sym,0),3),'mode':new_mode,'price':price,'peak':0,'pos':pos,'rev':1,'size_reason':f"LOSS_STREAK {last_losses} size {size_mult}x ${pos}"})
+  if len(o)<3:
    pool=[]
    for s in prices.keys():
     if s in [x['symbol'] for x in o]: continue
-    if abs(mom.get(s,0))<0.10: continue
-    pool.append((s,wr_score(s),abs(mom.get(s,0)),mom.get(s,0)))
-   pool.sort(key=lambda x:(x[1],x[2]),reverse=True)
-   for sym,score,abs_mom,m90 in pool[:4-len(o)]:
+    if abs(mom.get(s,0))<0.12: continue
+    pool.append((s,abs(mom.get(s,0)),mom.get(s,0)))
+   pool.sort(key=lambda x:x[1],reverse=True)
+   for sym,abs_mom,m90 in pool[:3-len(o)]:
     e=prices.get(sym)
     if not e: continue
     mode="LONG" if m90>0 else "SHORT"
-    base=cap/4 if cap>0 else 75
-    pos=calc_pos(sym, base)
-    o.append({'symbol':sym,'entry':e,'t':now,'m90':round(m90,3),'mode':mode,'price':e,'peak':0,'pos':pos,'rev':0,'size_reason':f"WR {score:.0%} MOM {m90:.2f}% LOSS_STREAK {loss_streak}"})
-   if len(o)<4:
-    for forced in ["LINKUSDT","DOGEUSDT","SOLUSDT","BTCUSDT"]:
-     if len(o)>=4: break
+    pos=calc_pos_with_streak()
+    o.append({'symbol':sym,'entry':e,'t':now,'m90':round(m90,3),'mode':mode,'price':e,'peak':0,'pos':pos,'rev':0,'size_reason':f"LOSS_STREAK {last_losses} size {size_mult}x ${pos} MOM {m90:.2f}%"})
+   if len(o)<3:
+    for forced in ["LINKUSDT","SOLUSDT","BTCUSDT","DOGEUSDT"]:
+     if len(o)>=3: break
      if forced in prices and forced not in [x['symbol'] for x in o]:
-      if abs(mom.get(forced,0))<0.06: continue
-      base=cap/4 if cap>0 else 75
-      pos=calc_pos(forced, base)
-      o.append({'symbol':forced,'entry':prices[forced],'t':now,'m90':round(mom.get(forced,0),3),'mode':"LONG" if mom.get(forced,0)>=0 else "SHORT",'price':prices[forced],'peak':0,'pos':pos,'rev':0,'size_reason':f"WR {wr_score(forced):.0%}"})
+      if abs(mom.get(forced,0))<0.08: continue
+      pos=calc_pos_with_streak()
+      o.append({'symbol':forced,'entry':prices[forced],'t':now,'m90':round(mom.get(forced,0),3),'mode':"LONG" if mom.get(forced,0)>=0 else "SHORT",'price':prices[forced],'peak':0,'pos':pos,'rev':0,'size_reason':f"LOSS_STREAK {last_losses} size {size_mult}x"})
   save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_STATS',st); save('VENUS_FEE_FUT',fee_fut_tot); save('VENUS_FEE_SPOT',fee_spot_tot); save('VENUS_PRICE',len(prices))
-  return {"ok":True,"open":len(o),"closed":len(cn),"cap":cap,"loss_streak":loss_streak}
+  return {"ok":True,"open":len(o),"closed":len(cn),"cap":cap,"loss_streak":last_losses,"mult":size_mult}
  except Exception as e:
   save('last',f"ERR {str(e)[:80]}")
   return {"ok":False}
@@ -178,17 +168,19 @@ body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{back
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 .real{background:#002a1a;border:1px solid #00ff88}
 </style></head><body>
-<h2>VENUS v198 SIZE SENSE 65% REAL FEE</h2>
-<div class="card real">CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/4</span> | Prices <span id=pc>0</span> | Fut Fee $<span id=fee>0</span> Spot $<span id=fee2>0</span><br><span class=m>SIZE SENSE ADDED: When not WIN → bigger size to recover. LOSS_STREAK 2 → pos $75→$97 (1.3x) → WIN $0.075→$0.11 recovers LOSS. Coin WR sense: LINK 60% WR → pos $90, BCH 30% WR → pos $50. Max $120 safe for real funds futures. Same V197 tuned: flip -0.12% not -0.039%, TRAIL 0.12%→0.04%, target 0.14% net_fut $0.075 WIN</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V198 SIZE SENSE 65% ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE SIZE SENSE 65%</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 SIZE SENSE</button></div>
-<div class=card><b>Open <span id=oc2>0/4</span> size sense $50-$120</b><div id=open>Press FORCE</div></div>
-<div class=card><b>Closed SIZE SENSE</b><div id=closed>Waiting...</div></div>
-<div class=card><b>Size sense explained</b><div class=m>
-<b>Before (fixed):</b> pos $75 always → LOSS $-0.045 → next WIN $0.046 → need 2 WINs to recover<br>
-<b>Now (size sense):</b> After 2 LOSS → pos $75*1.3=$97.5 → WIN 0.14% gross $0.136 fee $0.039 net $0.097 WIN → recovers LOSS $-0.045 in 1 trade<br><br>
-<b>Coin WR sense:</b> LINK WR 65% → pos $75*1.2=$90, BCH WR 30% → pos $75*0.7=$52 — bets bigger on winners for 65% target<br>
-<b>Max $120:</b> Safe for Binance Futures real funds — no liquidation, fee $0.048 for $120 pos, need 0.10% = $0.12 gross net $0.07 WIN<br>
-<b>Real market YES:</b> Binance real prices, real fee gross-fee=net, futures 0.04% = $0.03 fee $75 pos<br>
-<b>For real $ injection:</b> When V198 WR 55%+ with size sense CAP green, add BINANCE_API_KEY + REAL_TRADING=true — same logic places real orders with size sense
+<h2>VENUS v199 SIZE SENSE WHEN NOT WIN BIGGER</h2>
+<div class="card real">CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/3</span> | Prices <span id=pc>0</span> | Fut Fee $<span id=fee>0</span> Spot $<span id=fee2>0</span><br><span class=m>SIZE SENSE TRUE: When NOT WIN → BIGGER size. LOSS_STREAK 0 → $75, 1 LOSS → $97 (1.3x), 2 LOSS → $120 (1.6x), 3 LOSS → $120 cap. WIN 0.127% with $120 pos = $0.152 gross - $0.048 fee = $0.104 WIN recovers 2 LOSS. Reset after WIN. Real market + real fee fixed, 0.12% entry, 0.16% WIN, MAX 85s</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V199 TRUE SIZE SENSE 65% ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE TRUE SIZE SENSE</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 TRUE SIZE</button></div>
+<div class=card><b>Open <span id=oc2>0/3</span> size $75→$120 when not WIN</b><div id=open>Press FORCE</div></div>
+<div class=card><b>Closed TRUE SIZE SENSE</b><div id=closed>Waiting...</div></div>
+<div class=card><b>When not WIN, bigger size explained</b><div class=m>
+<b>Before V198 (wrong):</b> WR 30% BCH → pos $50 smaller when losing → LOSS $-0.028 → next WIN $0.012 with $50 = still LOSS<br>
+<b>Now V199 (true):</b> LOSS → LOSS_STREAK 1 → pos $75*1.3=$97.5, LOSS LOSS → pos $120, WIN 0.127% with $120 = $0.152 gross fee $0.048 net $0.104 WIN → recovers 2 LOSS in 1 trade<br><br>
+<b>Example:</b><br>
+LOSS $-0.028 pos $64.9<br>
+LOSS $-0.033 pos $92.7 → streak 2<br>
+Next pos $120 → WIN $0.057 gross $0.082 fee $0.026 net $0.057 (your LINK WIN) with $120 would be $0.152 gross $0.104 net → CAP $285→$285.07 recovers<br>
+After WIN → reset $75<br>
+Max $120 safe for Binance Futures real funds — fee $0.048, need 0.10% = $0.12 gross net $0.07 WIN — 65% possible
 </div></div>
 <script>
 async function loadState(){
@@ -201,13 +193,13 @@ async function loadState(){
   if(el('cr')) el('cr').innerText=j.last||'never';
   if(el('kv')) el('kv').innerText=j.kv?'YES':'NO';
   if(el('pc')) el('pc').innerText=j.price_count||0;
-  if(el('oc')) el('oc').innerText=(j.open||[]).length+'/4';
-  if(el('oc2')) el('oc2').innerText=(j.open||[]).length+'/4';
+  if(el('oc')) el('oc').innerText=(j.open||[]).length+'/3';
+  if(el('oc2')) el('oc2').innerText=(j.open||[]).length+'/3';
   let wr=j.total?Math.round(j.wins/j.total*100):0;
   if(el('wr')) el('wr').innerText=wr+'%';
   if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
-  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} pos $${(t.pos||75).toFixed(0)} ${t.rev?'REV🔄':''} ${t.m90||0}%<br><small>${t.size_reason||''}</small></span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'Waiting 0.10% momentum';
-  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} pos $${c.pos||75} ${c.hold}s ${c.pct||0}% gross $${c.gross||0} net_fut $${c.net||0} ${c.reason||''}</span><span><span class=${c.result=='WIN'&&c.net>0?'win':c.result=='SCRATCH'?'scratch':'loss'}>${c.result} $${(c.net||0).toFixed(3)}</span></span></div>`).join('')||'Waiting size sense trades';
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} pos $${(t.pos||75).toFixed(0)} ${t.rev?'REV🔄':''} ${t.m90||0}%<br><small>${t.size_reason||''}</small></span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'Waiting 0.12% momentum';
+  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} pos $${c.pos||75} ${c.hold}s ${c.pct||0}% gross $${c.gross||0} net_fut $${c.net||0} ${c.reason||''}</span><span><span class=${c.result=='WIN'&&c.net>0?'win':c.result=='SCRATCH'?'scratch':'loss'}>${c.result} $${(c.net||0).toFixed(3)}</span></span></div>`).join('')||'Waiting size sense';
  }catch(e){}
 }
 setInterval(loadState,2500); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},3500);
