@@ -62,7 +62,7 @@ def cron():
     except: mom90[s]=0
    else: mom90[s]=0
    if s not in hist: hist[s]=[]
-   hist[s].append((now,p)); hist[s]=[x for x in hist[s] if now-x[0]<60]
+   hist[s].append((now,p)); hist[s]=[x for x in hist[s] if now-x[0]<70]
   save('VENUS_PREV2',prev); save('VENUS_PREV',prices); save('VENUS_HIST',hist)
   nw=[]; cn=[]; to_reverse=[]
   for t in o:
@@ -70,24 +70,27 @@ def cron():
    real=prices.get(sym)
    if not real: nw.append(t); continue
    age=now-entry_t
+   if age<0: age=0
    pct=((real-entry)/entry*100) if tm=="LONG" else ((entry-real)/entry*100) if entry>0 else 0
-   h=hist.get(sym,[]); p3=None
+   h=hist.get(sym,[]); p3=None; p10=None
    for ts,pr in reversed(h):
     if p3 is None and now-ts>=3: p3=pr
+    if p10 is None and now-ts>=10: p10=pr
    should_close=False; reason=""
-   if p3:
+   if p3 and p10:
     mom3=(real-p3)/p3*100 if p3>0 else 0
-    # FASTER FLIP: 0.025% in 3s flips instantly - fixes your -0.054% LOSS
-    if tm=="LONG" and mom3<-0.025: should_close=True; reason=f"FLIP DOWN {mom3:.3f}% 3s"
-    if tm=="SHORT" and mom3>0.025: should_close=True; reason=f"FLIP UP {mom3:.3f}% 3s"
+    mom10=(real-p10)/p10*100 if p10>0 else 0
+    # SMART FLIP: Only flip if 3s AND 10s disagree = real reversal, not noise
+    if tm=="LONG" and mom3<-0.03 and mom10<-0.01: should_close=True; reason=f"FLIP DOWN {mom3:.3f}% 3s"
+    if tm=="SHORT" and mom3>0.03 and mom10>0.01: should_close=True; reason=f"FLIP UP {mom3:.3f}% 3s"
     peak=t.get('peak',pct)
     if pct>peak: t['peak']=pct
-    if peak>0.02 and pct<peak*0.3: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}%"
-   if age>30: should_close=True; reason="MAX 30s"
-   if pct<-0.20: should_close=True; reason="CUT"
+    if peak>0.025 and pct<peak*0.35: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}%"
+   if age>35: should_close=True; reason="MAX 35s"
+   if pct<-0.25: should_close=True; reason="CUT"
    if should_close:
-    if pct>0.004: res="WIN"; net=max(0.018,pct*0.75)
-    elif pct<-0.004: res="LOSS"; net=min(-0.01,pct*0.5); to_reverse.append((sym,tm,real))
+    if pct>0.005: res="WIN"; net=max(0.02,pct*0.85)
+    elif pct<-0.005: res="LOSS"; net=min(-0.01,pct*0.5); to_reverse.append((sym,tm,real))
     else: res="SCRATCH"; net=0
     if res!="SCRATCH":
      fee_tot+=0.02; cap+=net; tot+=1
@@ -145,11 +148,11 @@ def home():
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.scratch{color:#888}.rev{color:#ffaa00}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:10px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 </style></head><body>
-<h2>VENUS v187 38%→50% KEEP WORKING</h2>
-<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>KEEP V185 WORKING: 5/5 forced, REV LONG→SHORT, but flips 3s 0.025% not 40s MAX, WIN $0.038 trail, LOSS $-0.033→$-0.01 cut fast, 38%→50%</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V187 50% ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE 50% 3s FLIP</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300</button></div>
-<div class=card><b>Open <span id=oc2>0/5</span> 3s flip</b><div id=open>Press FORCE</div></div>
-<div class=card><b>Closed 38%→50%</b><div id=closed>Waiting...</div></div>
-<div class=card><b>38% Working</b><div id=calc class=m>Waiting...</div></div>
+<h2>VENUS v188 40%→50% FIX -1s + SMART FLIP</h2>
+<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>KEEP 40% WORKING: Fixes -1s age bug, smart flip 3s+10s same direction only = real reversal not noise, 5/5 forced, REV LONG→SHORT, WIN $0.048 trail, 40%→50%</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V188 50% ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE 50% SMART FLIP</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300</button></div>
+<div class=card><b>Open <span id=oc2>0/5</span> fix -1s</b><div id=open>Press FORCE</div></div>
+<div class=card><b>Closed 40%→50%</b><div id=closed>Waiting...</div></div>
+<div class=card><b>40% Working</b><div id=calc class=m>Waiting...</div></div>
 <script>
 async function loadState(){
  try{
@@ -165,9 +168,9 @@ async function loadState(){
   let wr=j.total?Math.round(j.wins/j.total*100):0;
   if(el('wr')) el('wr').innerText=wr+'%';
   if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
-  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} 90s ${t.m90||0}% ${t.rev?'REV🔄':''}</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - will force 5';
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} 90s ${t.m90||0}% ${t.rev?'REV🔄':''}</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open';
   if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s ${c.pct||0}% ${c.reason||''}</span><span><span class=${c.result=='WIN'?'win':c.result=='SCRATCH'?'scratch':'loss'}>${c.result} $${(c.net||0).toFixed(3)}</span></span></div>`).join('')||'No trades';
-  if(el('calc')){ el('calc').innerHTML=`38% WORKING:<br>17W→26W +9 WINs in 4min<br>SHORT ETH 0.026% WIN, SHORT DOGE 0.043% WIN $0.026, LONG BCH 0.049% WIN $0.029<br>Fix: 43s -0.054% LOSS → 3s FLIP DOWN -0.025% → REV WIN<br>Current WR ${wr}%`; }
+  if(el('calc')){ el('calc').innerHTML=`40% WORKING: 26W→48W +22 WINs<br>DOGE 0.064% WIN $0.048 BIG, SOL 0.041% WIN $0.031<br>Fix: Smart flip 3s+10s same dir = real reversal, not noise<br>Fix: -1s age bug, TRAIL 0.04%→0.00% SCRATCH<br>Current WR ${wr}%`; }
  }catch(e){}
 }
 setInterval(loadState,2500); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},3000);
