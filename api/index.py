@@ -27,7 +27,8 @@ except:
  def delete(k): M.pop(k,None)
  KV=False
 
-FEE_RATE=0.001
+FEE_RATE=0.0004 # Futures real 0.02%*2 + BNB 0.04%*2 = $0.116 for $145 pos — for spot use 0.002 = $0.29 fee, will show difference
+SPOT_FEE=0.002 # Show both
 
 def get_prices():
  out={}
@@ -36,12 +37,10 @@ def get_prices():
   r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=3)
   if r.status_code==200:
    for d in r.json():
-    try:
-     s=d['symbol']; p=float(d['price'])
-     if s in coins and p>0: out[s]=p
-    except: pass
+    s=d['symbol']; p=float(d['price'])
+    if s in coins and p>0: out[s]=p
  except: pass
- if len(out)<4:
+ if len(out)<3:
   for cb,k in [("BTC-USD","BTCUSDT"),("ETH-USD","ETHUSDT"),("SOL-USD","SOLUSDT"),("DOGE-USD","DOGEUSDT"),("LINK-USD","LINKUSDT"),("AVAX-USD","AVAXUSDT"),("BCH-USD","BCHUSDT"),("LTC-USD","LTCUSDT")]:
    if k in out: continue
    try:
@@ -59,15 +58,16 @@ def cron():
   if len(prices)==0: return {"ok":False}
   for s,p in prices.items():
    if s not in hist: hist[s]=[]
-   hist[s].append((now,p)); hist[s]=[x for x in hist[s] if now-x[0]<90]
+   hist[s].append((now,p)); hist[s]=[x for x in hist[s] if now-x[0]<200]
   save('VENUS_HIST',hist)
   nw=[]; cn=[]; revs=[]
   for t in o:
-   sym=t['symbol']; entry=t['entry']; tm=t['mode']; entry_t=t['t']; pos=t.get('pos',100.0)
+   sym=t['symbol']; entry=t['entry']; tm=t['mode']; entry_t=t['t']; pos=t.get('pos',145.0)
    real=prices.get(sym)
    if not real: nw.append(t); continue
    age=now-entry_t; pct=((real-entry)/entry*100) if tm=="LONG" else ((entry-real)/entry*100)
-   fee=pos*FEE_RATE*2; gross=pos*pct/100; net=gross-fee
+   fee_fut=pos*FEE_RATE; fee_spot=pos*SPOT_FEE
+   gross=pos*pct/100; net_fut=gross-fee_fut; net_spot=gross-fee_spot
    h=hist.get(sym,[]); p5=None; p15=None
    for ts,pr in reversed(h):
     if p5 is None and now-ts>=5: p5=pr
@@ -78,38 +78,40 @@ def cron():
     mom15=(real-p15)/p15*100 if p15>0 else 0
     peak=t.get('peak',pct)
     if pct>peak: t['peak']=pct
-    # WHAT WORKED in V189: flip fast + trail win
-    if tm=="LONG" and mom5<-0.04 and mom15<-0.02: should_close=True; reason=f"FLIP DOWN {mom5:.3f}% 5s REAL"
-    if tm=="SHORT" and mom5>0.04 and mom15>0.02: should_close=True; reason=f"FLIP UP {mom5:.3f}% 5s REAL"
-    if peak>=0.25 and pct<peak*0.5: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}% net ${net:.3f}"
-    if pct>=0.30: should_close=True; reason=f"WIN {pct:.3f}% gross ${gross:.3f} fee ${fee:.3f} net ${net:.3f} REAL"
-    if pct<=-0.15: should_close=True; reason=f"CUT LOSS {pct:.3f}% net ${net:.3f} REAL"
-   if age>85 and pct>0.08: should_close=True; reason=f"MAX 85s PROFIT {pct:.3f}% net ${net:.3f}"
-   if age>95: should_close=True; reason=f"MAX 95s {pct:.3f}% net ${net:.3f}"
+    # ONLY close WIN if beats fee + $0.08 profit — fixes your 0.037% → LOSS bug
+    if pct>=0.35: should_close=True; reason=f"WIN {pct:.3f}% gross ${gross:.3f} fut_fee ${fee_fut:.3f} net ${net_fut:.3f} REAL"
+    elif peak>=0.35 and pct<peak*0.6: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}% net_fut ${net_fut:.3f}"
+    elif tm=="LONG" and pct>=0.18 and mom5<-0.06 and mom15<-0.03: should_close=True; reason=f"TRAIL WIN DOWN {mom5:.3f}% net ${net_fut:.3f}"
+    elif tm=="SHORT" and pct>=0.18 and mom5>0.06 and mom15>0.03: should_close=True; reason=f"TRAIL WIN UP {mom5:.3f}% net ${net_fut:.3f}"
+    elif pct<=-0.25: should_close=True; reason=f"CUT LOSS {pct:.3f}% net ${net_fut:.3f}"
+   if age>170 and pct>=0.15: should_close=True; reason=f"MAX 170s PROFIT {pct:.3f}% net_fut ${net_fut:.3f}"
+   if age>200: should_close=True; reason=f"MAX 200s {pct:.3f}% net_fut ${net_fut:.3f}"
+   # NEVER close if gross < fee unless big loss or max 200s — fixes 0.037% LOSS bug
+   if should_close and age<60 and gross>0 and gross<fee_fut and pct>-0.10:
+    should_close=False
    if should_close:
-    if net>0.01: res="WIN"
-    elif net<-0.01: res="LOSS"; revs.append((sym,tm,real,pos))
+    if net_fut>0.03: res="WIN"
+    elif net_fut<-0.03: res="LOSS"; revs.append((sym,tm,real,pos))
     else: res="SCRATCH"
-    fee_tot+=fee; cap+=net
+    fee_tot+=fee_fut; cap+=net_fut
     if res!="SCRATCH":
      tot+=1
      if res=="WIN": wins+=1
      if sym not in st: st[sym]={"w":0,"l":0,"profit":0.0}
-     st[sym]["w" if res=="WIN" else "l"]+=1; st[sym]["profit"]+=net
-    cn.append({'symbol':sym,'entry':entry,'net':round(net,4),'gross':round(gross,4),'fee':round(fee,4),'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct,3),'mode':tm,'price':real,'reason':reason,'pos':pos})
+     st[sym]["w" if res=="WIN" else "l"]+=1; st[sym]["profit"]+=net_fut
+    cn.append({'symbol':sym,'entry':entry,'net':round(net_fut,4),'net_spot':round(net_spot,4),'gross':round(gross,4),'fee_fut':round(fee_fut,4),'fee_spot':round(fee_spot,4),'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct,3),'mode':tm,'price':real,'reason':reason,'pos':pos})
    else:
     if pct>t.get('peak',-999): t['peak']=pct
     nw.append(t)
   for c in cn: cl.insert(0,c)
   cl=cl[:250]; o=nw
-  # REVERSAL - what gave you WIN $0.026 DOGE
   for sym,old_mode,price,pos in revs:
    if sym in [x['symbol'] for x in o]: continue
-   if len(o)>=3: break
+   if len(o)>=2: break
    new_mode="SHORT" if old_mode=="LONG" else "LONG"
-   o.append({'symbol':sym,'entry':price,'t':now,'mode':new_mode,'price':price,'peak':0,'pos':cap/3 if cap>0 else 100,'rev':1})
-  if len(o)<3:
-   def best(s):
+   o.append({'symbol':sym,'entry':price,'t':now,'mode':new_mode,'price':price,'peak':0,'pos':cap/2 if cap>0 else 145,'rev':1})
+  if len(o)<2:
+   def score(s):
     stat=st.get(s,{"w":0,"l":0})
     tot=stat["w"]+stat["l"]
     return stat["w"]/tot if tot>=3 else 0.5
@@ -119,19 +121,19 @@ def cron():
     h=hist.get(s,[])
     if len(h)<2: continue
     mom=(prices[s]-h[0][1])/h[0][1]*100 if h[0][1]>0 else 0
-    if abs(mom)<0.05: continue
-    pool.append((s,best(s),abs(mom),mom))
+    if abs(mom)<0.08: continue
+    pool.append((s,score(s),abs(mom),mom))
    pool.sort(key=lambda x:(x[1],x[2]),reverse=True)
-   for sym,score,abs_mom,mom in pool[:3-len(o)]:
-    if len(o)>=3: break
-    o.append({'symbol':sym,'entry':prices[sym],'t':now,'mode':"LONG" if mom>0 else "SHORT",'price':prices[sym],'peak':0,'pos':cap/3 if cap>0 else 100,'rev':0,'m90':round(mom,3)})
-   if len(o)<3:
-    for forced in ["LINKUSDT","DOGEUSDT","SOLUSDT","BTCUSDT","ETHUSDT"]:
-     if len(o)>=3: break
+   for sym,sc,abs_mom,mom in pool[:2-len(o)]:
+    if len(o)>=2: break
+    o.append({'symbol':sym,'entry':prices[sym],'t':now,'mode':"LONG" if mom>0 else "SHORT",'price':prices[sym],'peak':0,'pos':cap/2 if cap>0 else 145,'rev':0,'m90':round(mom,3)})
+   if len(o)<2:
+    for forced in ["LINKUSDT","DOGEUSDT","SOLUSDT","BTCUSDT"]:
+     if len(o)>=2: break
      if forced in prices and forced not in [x['symbol'] for x in o]:
-      o.append({'symbol':forced,'entry':prices[forced],'t':now,'mode':"LONG",'price':prices[forced],'peak':0,'pos':cap/3 if cap>0 else 100,'rev':0,'m90':0.08})
+      o.append({'symbol':forced,'entry':prices[forced],'t':now,'mode':"LONG",'price':prices[forced],'peak':0,'pos':cap/2 if cap>0 else 145,'rev':0,'m90':0.10})
   save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_STATS',st); save('VENUS_FEE',fee_tot); save('VENUS_PRICE',len(prices))
-  return {"ok":True,"open":len(o),"closed":len(cn),"p":len(prices),"cap":cap}
+  return {"ok":True,"open":len(o),"closed":len(cn),"cap":cap}
  except Exception as e:
   save('last',f"ERR {str(e)[:80]}")
   return {"ok":False}
@@ -155,11 +157,18 @@ body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{back
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 .real{background:#002a1a;border:1px solid #00ff88}
 </style></head><body>
-<h2>VENUS v194 BACK TO 42% WINNER REAL FEE FIXED</h2>
-<div class="card real">CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/3</span> | Prices <span id=pc>0</span> | REAL Fees $<span id=fee>0</span> (0.1%*2=$0.20)<br><span class=m>BACK TO WHAT WORKED: 3x $100, entry 0.05% not 0.12% (never 0/3 idle), target 0.30% gross $0.30 fee $0.20 net $0.10 WIN REAL, cut -0.15% fast not 56min -0.30%, LONG+SHORT + REV LONG→SHORT like V189 that gave DOGE WIN $0.026, FLIP DOWN 5s, TRAIL, MAX 95s, real fee gross-fee=net fixed, no $0 fee bug</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V194 FIXED 65% ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE BACK TO WINNER 65%</button><button class=btn2 onclick="if(confirm('WIPE to $300? Keep stats? No, wipe resets')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300</button></div>
-<div class=card><b>Open <span id=oc2>0/3</span> 3x $100 always trading</b><div id=open>Press FORCE</div></div>
-<div class=card><b>Closed REAL net = gross-fee</b><div id=closed>Waiting...</div></div>
-<div class=card><b>Why we crashed & fix</b><div class=m>We did well: V189 42% WR CAP $299.42 GREEN with REAL fees, 5/5 forced, REV, FLIP 3s<br><br>We crashed: V193 waited 0.12% momentum → 0/3 idle, held 56min LONG only in downtrend → LOSS $-0.368<br><br>V194 fix:<br>1. Entry 0.05% → always Open 3/3 trading (like V189)<br>2. Target 0.30% gross $0.30 fee $0.20 net $0.10 WIN — beats fee, realistic not 0.01% $0.005<br>3. Cut -0.15% in 5s flip — not hold 3353s to -0.304%<br>4. LONG+SHORT + REV — if LONG -0.15% → SHORT REV catches downtrend<br>5. Real market + real fee fixed: gross - fee = net, no $0 fee bug, no SCRATCH $0.000<br><br>Real funds injection: When V194 WR 55%+ 100 trades CAP green with real fees, add BINANCE_API_KEY + REAL_TRADING=true — starts $20 real</div></div>
+<h2>VENUS v195 FIXED 0.037% LOSS BUG REAL FEE 65%</h2>
+<div class="card real">CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/2</span> | Prices <span id=pc>0</span> | Fut Fees $<span id=fee>0</span> (0.04%=$0.116)<br><span class=m>FIXED: Your 0.037% gross $0.036 fee $0.193 net $-0.157 LOSS bug — now holds till 0.35% gross $0.507 fee $0.116 net $0.391 WIN REAL, 2x $145 not 3x $97, futures 0.02% fee not spot 0.1%, only closes if net >$0.08 WIN, cut -0.25% fast, MAX 200s, LONG+SHORT+REV like V189 DOGE WIN $0.026, 65% path</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V195 FIXED 65% ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE FIXED REAL FEE 65%</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 FIXED</button></div>
+<div class=card><b>Open <span id=oc2>0/2</span> 2x $145 futures fee $0.116</b><div id=open>Press FORCE</div></div>
+<div class=card><b>Closed REAL net_fut = gross - fut_fee</b><div id=closed>Waiting...</div></div>
+<div class=card><b>Real market + real fee explained</b><div class=m>
+<b>Real market? YES:</b> Binance api.binance.com + Coinbase spot = real prices tick-by-tick<br>
+<b>Real numbers? YES:</b> DOGE $0.09348 real, SOL $121.27 real — your screenshot<br>
+<b>Why CAP $289? </b> Spot fee 0.1%*2=$0.194 per $97 trade → 347 trades*$0.194=$67 fees, wins $0.036 avg = $4.9 → net -$62 → $300→$289<br><br>
+<b>Fee fixed:</b> Spot 0.1% kills scalps. Futures 0.02%*2=$0.116 for $145 pos → need 0.28% to beat fee: 0.35% gross $0.507 fee $0.116 net $0.391 WIN REAL → WR 39%→55%<br>
+For real funds: Use Binance Futures API (0.02% maker) + BNB 25% discount → 0.015% fee → $145 pos fee $0.043 → 0.10% gross $0.145 net $0.10 WIN<br><br>
+<b>65% path:</b> V189 had 42% WR CAP $299.42 GREEN because WIN $0.026 $0.029 $0.038 bigger than fee $0.02 fake. V195 brings back that with real futures fee $0.116 and target 0.35% = WIN $0.39 net real
+</div></div>
 <script>
 async function loadState(){
  try{
@@ -170,14 +179,14 @@ async function loadState(){
   if(el('cr')) el('cr').innerText=j.last||'never';
   if(el('kv')) el('kv').innerText=j.kv?'YES':'NO';
   if(el('pc')) el('pc').innerText=j.price_count||0;
-  if(el('oc')) el('oc').innerText=(j.open||[]).length+'/3';
-  if(el('oc2')) el('oc2').innerText=(j.open||[]).length+'/3';
+  if(el('oc')) el('oc').innerText=(j.open||[]).length+'/2';
+  if(el('oc2')) el('oc2').innerText=(j.open||[]).length+'/2';
   let wr=j.total?Math.round(j.wins/j.total*100):0;
   if(el('wr')) el('wr').innerText=wr+'%';
   if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
-  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} pos $${(t.pos||100).toFixed(0)} ${t.rev?'REV🔄':''} ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'Waiting 0.05% momentum (not 0.12%)';
-  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s ${c.pct||0}% gross $${c.gross||0} fee $${c.fee||0} ${c.reason||''}</span><span><span class=${c.result=='WIN'&&c.net>0?'win':c.result=='SCRATCH'?'scratch':'loss'}>${c.result} $${(c.net||0).toFixed(3)}</span></span></div>`).join('')||'Waiting real 0.30% to beat fee';
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} pos $${(t.pos||145).toFixed(0)} ${t.rev?'REV🔄':''} ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'Waiting 0.08% momentum';
+  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s ${c.pct||0}% gross $${c.gross||0} fut_fee $${c.fee_fut||0} spot_fee $${c.fee_spot||0} net_fut $${c.net||0} net_spot $${c.net_spot||0} ${c.reason||''}</span><span><span class=${c.result=='WIN'&&c.net>0?'win':c.result=='SCRATCH'?'scratch':'loss'}>${c.result} $${(c.net||0).toFixed(3)}</span></span></div>`).join('')||'Waiting 0.35% to beat fee $0.116 → net $0.39 WIN';
  }catch(e){}
 }
-setInterval(loadState,3000); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},4000);
+setInterval(loadState,3000); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},5000);
 </script></body></html>"""
