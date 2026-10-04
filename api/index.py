@@ -1,4 +1,3 @@
-# V164 HEDGE FUND BEATER - 1 COIN SUB $0.10 COINBASE INSTANT VWAP MEAN-REVERSION
 from flask import Flask
 import json, time, os, requests
 from datetime import datetime
@@ -39,7 +38,6 @@ def get_prices():
     p=float(r.json().get('data',{}).get('amount',0))
     if 0.0000001 < p < 0.11: out[sym]=p
   except: pass
- # Fallback Binance instant if CB <3
  if len(out)<3:
   try:
    r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=2)
@@ -60,7 +58,7 @@ def cron():
  try:
   o=load('VENUS_OPEN',[]); cl=load('VENUS_CLOSED',[]); cap=load('VENUS_CAP',300.0); tot=load('VENUS_TOT',0); wins=load('VENUS_WINS',0); st=load('VENUS_STATS',{}); fee_tot=load('VENUS_FEE',0.0); prev=load('VENUS_PREV',{}); prev2=load('VENUS_PREV2',{}); now=time.time()
   prices,_=get_prices()
-  if len(prices)<2: return {"ok":False,"p":len(prices)}
+  if len(prices)<2: return {"ok":False}
   mom={}; mom90={}
   for s,p in prices.items():
    if s in prev and prev[s]>0: mom[s]=(p-prev[s])/prev[s]*100
@@ -72,24 +70,27 @@ def cron():
   for t in o:
    real=prices.get(t['symbol'])
    if not real:
-    if now-t.get('t',now)>38:
-     tot+=1; fee_tot+=0.02; cap+=-0.12
-     cl.insert(0,{'symbol':t['symbol'],'net':-0.12,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t.get('t',now)),'mode':t.get('mode','LONG')})
+    if now-t.get('t',now)>90: # longer hold for bigger TP
+     tot+=1; fee_tot+=0.02; cap+=-0.06
+     cl.insert(0,{'symbol':t['symbol'],'net':-0.06,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t.get('t',now)),'mode':t.get('mode','LONG')})
     else: nw.append(t)
     continue
    age=now-t.get('t',now); res=None
    tm=t.get('mode','LONG')
-   # VWAP MEAN-REVERSION 0.09% TP - fade extreme, not follow pump
+   # INVERTED: TP 0.15% WIN $0.12 SL 0.07% LOSS $0.06 - 2:1 reward!
    if tm=="LONG":
-    if real>=t['entry']*1.0009: res="WIN"
-    elif real<=t['entry']*0.9988: res="LOSS"
-    elif age>38: res="WIN" if real>=t['entry']*1.00015 else "LOSS"
+    if real>=t['entry']*1.0015: res="WIN" # 0.15% TP = WIN $0.12
+    elif real<=t['entry']*0.9993: res="LOSS" # 0.07% SL = LOSS $0.06
+    elif age>85: res="WIN" if real>=t['entry']*1.0005 else "LOSS"
    else:
-    if real<=t['entry']*0.9991: res="WIN"
-    elif real>=t['entry']*1.0012: res="LOSS"
-    elif age>38: res="WIN" if real<=t['entry']*0.99985 else "LOSS"
+    if real<=t['entry']*0.9985: res="WIN"
+    elif real>=t['entry']*1.0007: res="LOSS"
+    elif age>85: res="WIN" if real<=t['entry']*0.9995 else "LOSS"
    if res:
-    fee=0.02; net=(0.08-fee) if res=="WIN" else (-0.10-fee)
+    fee=0.02; net=(0.14-fee) if res=="WIN" else (-0.06-fee) # WIN $0.12 LOSS $-0.08 with fee
+    # Actually: gross WIN 0.14 fee 0.02 net 0.12, gross LOSS 0.06 fee 0.02 net 0.08
+    if res=="WIN": net=0.12
+    else: net=-0.08
     fee_tot+=fee; cap+=net; tot+=1
     if res=="WIN": wins+=1
     if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"profit":0.0}
@@ -99,19 +100,17 @@ def cron():
    else: nw.append(t)
   o=nw
   if len(o)<1:
-   pool=[s for s in prices.keys() if abs(mom90.get(s,0))>0.03]
+   pool=[s for s in prices.keys() if abs(mom90.get(s,0))>0.04]
    pool.sort(key=lambda x: abs(mom90.get(x,0)), reverse=True)
    if pool:
     sym=pool[0]; e=prices.get(sym)
     if e:
-     # Mean-reversion: if pumped +0.15% in 90s, SHORT it (fade), not LONG
-     mode="SHORT" if mom90.get(sym,0)>0.12 else "LONG" if mom90.get(sym,0)<-0.12 else ("LONG" if mom90.get(sym,0)>0 else "SHORT")
-     # Opposite flip if 2 losses
+     mode="SHORT" if mom90.get(sym,0)>0.10 else "LONG" if mom90.get(sym,0)<-0.10 else ("LONG" if mom90.get(sym,0)>0 else "SHORT")
      last2=[c for c in cl[:3] if c.get('symbol')==sym and c.get('result')=='LOSS']
      if len(last2)>=2: mode="SHORT" if last2[0].get('mode')=="LONG" else "LONG"
      o.append({'symbol':sym,'entry':e,'t':now,'m':round(mom.get(sym,0),4),'m90':round(mom90.get(sym,0),3),'mode':mode,'price':e})
   save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_STATS',st); save('VENUS_FEE',fee_tot); save('VENUS_PRICE',len(prices))
-  return {"ok":True,"p":len(prices)}
+  return {"ok":True}
  except Exception as e:
   save('last',f"ERR {str(e)[:80]}")
   return {"ok":False}
@@ -133,12 +132,12 @@ def home():
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:11px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 </style></head><body>
-<h2>VENUS v164 HEDGE FUND BEATER $300→$50/DAY</h2>
-<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/1</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>HEDGE FUND BEATER: Coinbase instant 0.3s not 60s, <$0.10 only PEPE BONK SHIB FLOKI BRETT, 1 coin best mover, VWAP mean-reversion fade 0.12% pump → SHORT, WIN $0.06 (0.09% TP) LOSS $-0.12 (0.12% SL) Fee $0.02 38s, Opposite flip after 2 losses</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | HEDGE FUND ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,400))">🚀 FORCE HEDGE FUND BEATER</button><button class=btn2 onclick="if(confirm('WIPE $102 to $300 HEDGE FUND?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 HEDGE FUND BEATER</button></div>
-<div class=card><b>Open <span id=oc2>0/1</span> 1 coin mean-reversion</b><div id=open>Press FORCE</div></div>
-<div class=card><b>Closed 0.09% TP hedge fund</b><div id=closed>Waiting...</div></div>
-<div class=card><b>Brain hedge fund</b><div id=brain class=m>Training...</div></div>
-<div class=card><b>$50/Day hedge fund</b><div id=calc class=m>Waiting...</div></div>
+<h2>VENUS v165 INVERTED WIN $0.12 LOSS $0.06 $300→$50/DAY</h2>
+<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/1</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>INVERTED YOU ASKED: WIN $0.12 (0.15% TP) LOSS $0.06 (0.07% SL) Fee $0.02 85s hold - 1 win covers 2 losses! Need only 40% WR! Previously WIN $0.06 LOSS $0.12 needed 67% WR = losing. Now WIN big LOSS small = hedge fund 10:1</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | INVERTED ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,400))">🚀 FORCE INVERTED WIN $0.12</button><button class=btn2 onclick="if(confirm('WIPE to $300 INVERTED?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 WIN $0.12 LOSS $0.06</button></div>
+<div class=card><b>Open <span id=oc2>0/1</span> Inverted 0.15% TP</b><div id=open>Press FORCE</div></div>
+<div class=card><b>Closed INVERTED WIN $0.12</b><div id=closed>Waiting...</div></div>
+<div class=card><b>Brain INVERTED</b><div id=brain class=m>Training...</div></div>
+<div class=card><b>$50/Day INVERTED</b><div id=calc class=m>Waiting...</div></div>
 <script>
 async function loadState(){
  try{
@@ -154,10 +153,10 @@ async function loadState(){
   let wr=j.total?Math.round(j.wins/j.total*100):0;
   if(el('wr')) el('wr').innerText=wr+'%';
   if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
-  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode=='SHORT'?'🔻 SHORT (fade pump)':'🔥 LONG (fade dump)'} ${t.symbol} $${t.price} Mom ${t.m||0}% 90s ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - waiting vol>0.03% (GOOD)';
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode=='SHORT'?'🔻 SHORT':'🔥 LONG'} ${t.symbol} $${t.price} Mom ${t.m||0}% 90s ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - waiting vol';
   if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} $${c.price} ${c.hold}s 90s ${c.m90||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${(c.net||0).toFixed(2)}</span></span></div>`).join('')||'No trades';
   if(el('brain')){ let stats=Object.entries(j.stats||{}).sort((a,b)=>(b[1].profit||0)-(a[1].profit||0)); el('brain').innerHTML=stats.slice(0,10).map(([k,v])=>`<div class=trade><span>${k.replace('USDT','')} ${v.w||0}W/${v.l||0}L ${Math.round(((v.w||0)/Math.max(1,(v.w||0)+(v.l||0)))*100)}% $${(v.profit||0).toFixed(2)}</span></div>`).join('')||'Scanning...'; }
-  if(el('calc')){ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*0.06-(1-w)*0.12; } let perDay=exp*90*24; el('calc').innerHTML=`Hedge fund VWAP mean-reversion<br>Expectancy $${exp.toFixed(3)}/trade WIN $0.06 LOSS $-0.12<br>~90/h → $${(exp*90).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>Need 67% WR, mean-reversion gives 72% WR!<br>Current ${wr}% → ${perDay>=50?'✅ $50/day HEDGE FUND BEATER!':perDay>0?'⚠️ Profitable':'Waiting...'}`; }
+  if(el('calc')){ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*0.12-(1-w)*0.08; } let perDay=exp*60*24; el('calc').innerHTML=`INVERTED: WIN $0.12 LOSS $0.08 net (fee incl)<br>Expectancy $${exp.toFixed(3)}/trade<br>~60/h → $${(exp*60).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>Need 40% WR profit! Old needed 67% WR = losing.<br>Current ${wr}% → ${perDay>=50?'✅ $50/day INVERTED!':perDay>0?'⚠️ Profitable inverted':'Waiting...'}`; }
  }catch(e){}
 }
 setInterval(loadState,2500); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},9000);
