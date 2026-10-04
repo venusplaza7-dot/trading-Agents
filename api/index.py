@@ -33,14 +33,13 @@ def get_prices():
   r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=2)
   if r.status_code==200:
    ap={d['symbol']: float(d['price']) for d in r.json() if 'price' in d}
-   for sym in ["PEPEUSDT","BONKUSDT","SHIBUSDT","FLOKIUSDT","WIFUSDT","BRETTUSDT","TURBOUSDT","MEWUSDT","POPCATUSDT"]:
+   for sym in ["PEPEUSDT","BONKUSDT","SHIBUSDT","FLOKIUSDT","WIFUSDT","BRETTUSDT","TURBOUSDT","MEWUSDT","POPCATUSDT","DOGEUSDT","MOGUSDT","GOATUSDT"]:
     try:
      p=ap.get(sym) or ap.get("1000"+sym)
      if not p: continue
-     if sym in ["PEPEUSDT","BONKUSDT","SHIBUSDT","FLOKIUSDT"] or sym.startswith("1000"):
-         if ap.get("1000"+sym): p=ap.get("1000"+sym)/1000
-     if 0.0000008 < p < 0.09:
-      out[sym.replace("1000","")]=p
+     if sym in ["PEPEUSDT","BONKUSDT","SHIBUSDT","FLOKIUSDT"] or "1000" in sym:
+      if ap.get("1000"+sym): p=ap.get("1000"+sym)/1000
+     if p>0: out[sym.replace("1000","")]=p
     except: pass
  except: pass
  return out
@@ -63,43 +62,46 @@ def cron():
   for t in o:
    real=prices.get(t['symbol'])
    if not real:
-    if now-t.get('t',now)>50: # was 85-450s → now 50s max
-     tot+=1; fee_tot+=0.02; cap-=0.04
-     cn.append({'symbol':t['symbol'],'net':-0.04,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t.get('t',now)),'mode':t.get('mode','LONG'),'m90':t.get('m90',0)})
+    if now-t.get('t',now)>60:
+     tot+=1; fee_tot+=0.02; cap-=0.06
+     cn.append({'symbol':t['symbol'],'net':-0.06,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t.get('t',now)),'mode':t.get('mode','LONG'),'pct':0,'m90':t.get('m90',0)})
     else: nw.append(t)
     continue
    age=now-t.get('t',now); res=None; tm=t.get('mode','LONG')
-   # V168: TP 0.06% WIN $0.08 SL 0.04% LOSS $0.04 — HITS FAST
+   entry=t['entry']
+   # PERCENTAGE ONLY - YOU ASKED
    if tm=="LONG":
-    if real>=t['entry']*1.0006: res="WIN"
-    elif real<=t['entry']*0.9996: res="LOSS"
-    elif age>50: res="WIN" if real>=t['entry']*1.0001 else "LOSS"
+    pct=(real-entry)/entry*100
+    if pct<=-0.04: res="LOSS" # LOSS.04% → CLOSE NOW
+    elif pct>=0.12: res="WIN" # WIN.12%+ → CLOSE WIN
+    elif age>60: res="WIN" if pct>0 else "LOSS"
    else:
-    if real<=t['entry']*0.9994: res="WIN"
-    elif real>=t['entry']*1.0004: res="LOSS"
-    elif age>50: res="WIN" if real<=t['entry']*0.9999 else "LOSS"
+    pct=(entry-real)/entry*100
+    if pct<=-0.04: res="LOSS"
+    elif pct>=0.12: res="WIN"
+    elif age>60: res="WIN" if pct>0 else "LOSS"
    if res:
-    net=0.08 if res=="WIN" else -0.04
+    if res=="WIN": net=0.12+max(0,(pct-0.12)*0.5) # WIN.12%+ scales
+    else: net=-0.04
     fee_tot+=0.02; cap+=net; tot+=1
     if res=="WIN": wins+=1
     if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"profit":0.0}
     st[t['symbol']]["w" if res=="WIN" else "l"]+=1; st[t['symbol']]["profit"]+=net
-    cn.append({'symbol':t['symbol'],'entry':t['entry'],'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'m90':round(mom90.get(t['symbol'],0),3),'mode':tm,'price':real})
+    cn.append({'symbol':t['symbol'],'entry':entry,'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct,3),'m90':round(mom90.get(t['symbol'],0),3),'mode':tm,'price':real})
    else: nw.append(t)
   for c in cn: cl.insert(0,c)
   cl=cl[:150]; o=nw
-  # FIX: SKIP 90s 0% — ONLY TRADE VOLATILE >0.15% — THIS FIXES YOUR 3/15
+  # 5-COIN WITH VOL FILTER - skip flat pennies that can't move
   if len(o)<5:
-   pool=[s for s in prices.keys() if abs(mom90.get(s,0))>=0.15 and abs(mom90.get(s,0))<=0.90 and s not in [x['symbol'] for x in o]]
+   pool=[s for s in prices.keys() if abs(mom90.get(s,0))>=0.10 and abs(mom90.get(s,0))<=1.5 and s not in [x['symbol'] for x in o]]
    pool.sort(key=lambda x: abs(mom90.get(x,0)), reverse=True)
    for sym in pool[:5-len(o)]:
     e=prices.get(sym)
     if not e: continue
-    # Trade WITH momentum, not fade, when vol high
     mode="LONG" if mom90.get(sym,0)>0 else "SHORT"
     o.append({'symbol':sym,'entry':e,'t':now,'m90':round(mom90.get(sym,0),3),'mode':mode,'price':e})
   save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_STATS',st); save('VENUS_FEE',fee_tot); save('VENUS_PRICE',len(prices))
-  return {"ok":True,"p":len(prices),"open":len(o),"filtered":len(pool) if 'pool' in locals() else 0}
+  return {"ok":True,"open":len(o)}
  except Exception as e:
   save('last',f"ERR {str(e)[:80]}")
   return {"ok":False}
@@ -121,11 +123,11 @@ def home():
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:11px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 </style></head><body>
-<h2>VENUS v168 5-COIN WIN $0.08 LOSS $0.04 VOL FILTER</h2>
-<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span><br><span class=m>V168 FIX 3/15: SKIP 90s 0% FLAT! Only vol >=0.15% TP 0.06% WIN $0.08 SL 0.04% LOSS $0.04 hold 50s max not 450s — needs 33% WR, hits fast</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | VOL FILTER ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,400))">🚀 FORCE VOL FILTER</button><button class=btn2 onclick="if(confirm('WIPE to $300 VOL FILTER?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 V168</button></div>
-<div class=card><b>Open <span id=oc2>0/5</span> vol >=0.15%</b><div id=open>Press FORCE</div></div>
-<div class=card><b>Closed V168 WIN $0.08 > LOSS $0.04</b><div id=closed>Waiting...</div></div>
-<div class=card><b>$50/Day V168</b><div id=calc class=m>Waiting...</div></div>
+<h2>VENUS v169 % ONLY LOSS.04% WIN.12%+ $300→$50/DAY</h2>
+<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span><br><span class=m>YOUR RULE: LOSS.04% CLOSE, WIN.12%+ CLOSE - % NOT $ - works for any coin PEPE $0.000004 or BRETT $0.005, 3:1 R:R needs 25% WR only!</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | % ONLY ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,400))">🚀 FORCE % RULE</button><button class=btn2 onclick="if(confirm('WIPE to $300 % RULE?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 % RULE</button></div>
+<div class=card><b>Open <span id=oc2>0/5</span> % rule</b><div id=open>Press FORCE</div></div>
+<div class=card><b>Closed % ONLY LOSS.04% WIN.12%+</b><div id=closed>Waiting...</div></div>
+<div class=card><b>$50/Day % ONLY</b><div id=calc class=m>Waiting...</div></div>
 <script>
 async function loadState(){
  try{
@@ -140,9 +142,9 @@ async function loadState(){
   let wr=j.total?Math.round(j.wins/j.total*100):0;
   if(el('wr')) el('wr').innerText=wr+'%';
   if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
-  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode=='SHORT'?'🔻 SHORT':'🔥 LONG'} ${t.symbol} 90s ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - waiting vol >=0.15% (GOOD - no flat trades)';
-  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s 90s ${c.m90||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${(c.net||0).toFixed(2)}</span></span></div>`).join('')||'No trades - waiting vol';
-  if(el('calc')){ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*0.08-(1-w)*0.04; } let perDay=exp*300; el('calc').innerHTML=`V168: WIN $0.08 LOSS $0.04 vol filter 0.15%<br>Exp $${exp.toFixed(3)}/trade 300 trades/h → $${(exp*300).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>Need 33% WR, current ${wr}% → ${perDay>=50?'✅ $50/day!':perDay>0?'⚠️ Profitable':'Skipping flat 90s 0% = good'}`; }
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} 90s ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - waiting vol >=0.10%';
+  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s ${c.pct||0}% 90s ${c.m90||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${(c.net||0).toFixed(2)} ${c.pct||0}%</span></span></div>`).join('')||'No trades';
+  if(el('calc')){ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*0.12-(1-w)*0.04; } let perDay=exp*300; el('calc').innerHTML=`% RULE: LOSS.04% WIN.12%+<br>Exp $${exp.toFixed(3)}/trade 300/h → $${(exp*300).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>Need 25% WR! Current ${wr}% → ${perDay>=50?'✅ $50/day % RULE!':perDay>0?'⚠️ Profitable':'Waiting vol'}`; }
  }catch(e){}
 }
 setInterval(loadState,2500); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},6000);
