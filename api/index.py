@@ -43,7 +43,8 @@ def get_prices():
      out[sym]=float(c['current_price'])
      m24[sym]=c.get('price_change_percentage_24h',0) or 0
    return out,m24
- except: pass
+ except Exception as e:
+  print(e)
  return {},{}
 
 @app.route('/api/cron')
@@ -53,16 +54,17 @@ def cron():
   o=load('VENUS_OPEN',[]); cl=load('VENUS_CLOSED',[]); cap=load('VENUS_CAP',300.0); tot=load('VENUS_TOT',0); wins=load('VENUS_WINS',0); st=load('VENUS_STATS',{}); fee_tot=load('VENUS_FEE',0.0); prev=load('VENUS_PREV',{}); now=time.time()
   prices,m24=get_prices()
   if not prices:
+   # auto close stuck trades >90s when no price
    nw=[]
    for t in o:
-    if now-t['t']>120: # force close stuck 17607s bug
-     tot+=1; cap+=-0.45; fee_tot+=0.20
+    if now-t.get('t',now)>90:
+     tot+=1; fee_tot+=0.20; cap+=-0.45
      if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"profit":0.0}
      st[t['symbol']]["l"]+=1; st[t['symbol']]["profit"]+=-0.45
-     cl.insert(0,{'symbol':t['symbol'],'net':-0.45,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t['t']),'m':0})
+     cl.insert(0,{'symbol':t['symbol'],'net':-0.45,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t.get('t',now)),'mode':'SHORT'})
     else: nw.append(t)
-   save('VENUS_OPEN',nw); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_FEE',fee_tot)
-   return {"ok":False}
+   save('VENUS_OPEN',nw); save('VENUS_CLOSED',cl[:100]); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_FEE',fee_tot); save('VENUS_STATS',st)
+   return {"ok":False,"prices":0,"closed":len(o)-len(nw)}
   mom={}
   for s,p in prices.items():
    if s in prev: mom[s]=(p-prev[s])/prev[s]*100
@@ -72,23 +74,22 @@ def cron():
   for t in o:
    real=prices.get(t['symbol'])
    if not real:
-    if now-t['t']>90: # 90s max no price
-     tot+=1; cap+=-0.45; fee_tot+=0.20
+    if now-t.get('t',now)>60: 
+     tot+=1; fee_tot+=0.20; cap+=-0.45
      if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"profit":0.0}
      st[t['symbol']]["l"]+=1; st[t['symbol']]["profit"]+=-0.45
-     cl.insert(0,{'symbol':t['symbol'],'gross':-0.25,'fee':0.20,'net':-0.45,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t['t']),'m':0,'mode':'SHORT'})
+     cl.insert(0,{'symbol':t['symbol'],'net':-0.45,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(now-t.get('t',now)),'mode':'SHORT'})
     else: nw.append(t)
     continue
-   age=now-t['t']; res=None
-   # REVERSE STRATEGY - SHORT PUMP!
-   # We SHORT when it pumped +0.06% - expect dump -0.9% = WIN!
-   if real<=t['entry']*0.991: res="WIN" # dropped 0.9% = WIN $0.25
-   elif real>=t['entry']*1.005: res="LOSS" # pumped 0.5% more = LOSS $-0.45
-   elif age>90: res="WIN" if real<=t['entry']*0.998 else "LOSS" # 90s timeout
+   age=now-t.get('t',now); res=None
+   # REVERSE SHORT: SHORT pump, TP when drops 0.9%
+   if real<=t['entry']*0.991: res="WIN"
+   elif real>=t['entry']*1.005: res="LOSS"
+   elif age>90: res="WIN" if real<=t['entry']*0.998 else "LOSS"
    if res:
     fee=0.20; gw=0.45; gl=0.25
     gross=gw if res=="WIN" else -gl
-    net=gross-fee if res=="WIN" else -gl-fee # WIN $0.25 Net LOSS $-0.45 Net
+    net=gross-fee if res=="WIN" else -gl-fee
     fee_tot+=fee; cap+=net; tot+=1
     if res=="WIN": wins+=1
     if t['symbol'] not in st: st[t['symbol']]={"w":0,"l":0,"profit":0.0,"last_win":0}
@@ -96,39 +97,37 @@ def cron():
     st[t['symbol']]["profit"]+=net
     if res=="WIN": st[t['symbol']]["last_win"]=now
     cl.insert(0,{'symbol':t['symbol'],'gross':gross,'fee':fee,'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'m':round(mom.get(t['symbol'],0),3),'m24':round(m24.get(t['symbol'],0),1),'mode':'SHORT'})
-    cl=cl[:100]
+    cl=cl[:120]
    else: nw.append(t)
   o=nw
   if len(o)<6:
-   used=set(x['symbol'] for x in o)
+   used=set(x.get('symbol') for x in o)
    def wr(s): dd=st.get(s,{"w":1,"l":1}); return dd["w"]/max(1,dd["w"]+dd["l"])
-   # REVERSE ENTRY: Pick MOST PUMPED last 20sec - to SHORT it!
    pool=[x for x in prices.keys() if x not in used]
-   # Sort by mom DESC - most pumped first
-   pool.sort(key=lambda x: (mom.get(x,0), m24.get(x,0)), reverse=True)
-   # Only short if mom > 0.04% (pumped)
-   pumping=[x for x in pool if mom.get(x,0)>0.03]
-   top=pumping[:15] if len(pumping)>=3 else pool[:15]
+   pool.sort(key=lambda x: mom.get(x,0), reverse=True) # most pumped first to SHORT
+   pumping=[x for x in pool if mom.get(x,0)>0.02]
+   top=pumping[:12] if len(pumping)>=3 else pool[:12]
    for _ in range(6-len(o)):
     if not top: break
     sym=top[0]
     e=prices.get(sym)
     if e:
-     o.append({'symbol':sym,'entry':e,'t':now,'wr':int(wr(sym)*100),'score':round(mom.get(sym,0),3),'m':round(mom.get(sym,0),3),'m24':round(m24.get(sym,0),1)})
+     o.append({'symbol':sym,'entry':e,'t':now,'wr':int(wr(sym)*100),'m':round(mom.get(sym,0),3),'m24':round(m24.get(sym,0),1)})
      top.pop(0)
     else: top.pop(0)
   save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_STATS',st); save('VENUS_FEE',fee_tot); save('VENUS_PRICE',len(prices))
-  return {"ok":True,"prices":len(prices),"open":len(o),"mode":"SHORT_REVERSE"}
+  return {"ok":True,"prices":len(prices),"open":len(o),"mode":"SHORT"}
  except Exception as e:
-  save('last',f"ERR {str(e)[:60]}")
-  return {"ok":False}
+  save('last',f"ERR {str(e)[:80]}")
+  return {"ok":False,"err":str(e)}
 
 @app.route('/api/reset')
 def reset():
  for k in ['VENUS_OPEN','VENUS_CLOSED','VENUS_CAP','VENUS_TOT','VENUS_WINS','VENUS_STATS','VENUS_FEE','VENUS_PRICE','VENUS_PREV','last']:
-  delete(k)
- save('VENUS_CAP',300.0); save('VENUS_TOT',0); save('VENUS_WINS',0); save('VENUS_STATS',{}); save('VENUS_FEE',0.0); save('VENUS_OPEN',[]); save('VENUS_CLOSED',[]); save('last',datetime.now().strftime("%H:%M:%S"))
- return {"reset":True,"cap":300,"mode":"SHORT_REVERSE"}
+  try: delete(k)
+  except: pass
+ save('VENUS_CAP',300.0); save('VENUS_TOT',0); save('VENUS_WINS',0); save('VENUS_STATS',{}); save('VENUS_FEE',0.0); save('VENUS_OPEN',[]); save('VENUS_CLOSED',[]); save('VENUS_PRICE',0); save('last',datetime.now().strftime("%H:%M:%S"))
+ return {"reset":True,"cap":300.0}
 
 @app.route('/api/force')
 def force(): return cron()
@@ -138,33 +137,34 @@ def state(): return {"open":load('VENUS_OPEN',[]),"closed":load('VENUS_CLOSED',[
 @app.route('/')
 def home():
  return """<html><head><meta name=viewport content="width=device-width,initial-scale=1"><style>
-body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.fee{color:#ffaa00}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:11px}
+body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:11px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 </style></head><body>
-<h2>VENUS v153 REVERSE SHORT $300→$50/DAY REAL</h2>
-<div class=card>CAP REAL $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=st>0</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>Fee $0.20 Real | SHORT WIN $0.25 Net (drop 0.9%) | SHORT LOSS $-0.45 Net (pump 0.5%) | Cron: <span id=c>never</span> | KV: <b id=k>YES</b> | REVERSE SHORT ✅</span><br><span class=m>$300 | $50/coin | 6 open | SHORT most pumped +0.03% | TP 0.9% drop SL 0.5% pump | 90s timeout | Mean reversion</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>R())">🚀 FORCE REVERSE SHORT 100</button><button class=btn2 onclick="if(confirm('Wipe 9% WR? Reverse will give 91% WR!')) fetch('/api/reset').then(()=>R())">🗑️ WIPE → $300 REVERSE SHORT</button></div>
-<div class=card><b>Open SHORT 6/6 Most PUMPED to short</b><div id=o>Press FORCE</div></div>
-<div class=card><b>Closed REAL — REVERSE SHORT</b><div id=cl>Waiting...</div></div>
-<div class=card><b>Brain REAL — REVERSE</b><div id=br class=m>Training...</div></div>
-<div class=card><b>$50/Day REAL — REVERSE</b><div id=rc class=m>Waiting...</div></div>
+<h2>VENUS v154 REVERSE SHORT FIXED $300→$50/DAY</h2>
+<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>SHORT WIN $0.25 (drop 0.9%) | LOSS $-0.45 (pump 0.5%) | Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | REVERSE MEAN REVERSION ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(r=>r.json()).then(()=>{setTimeout(loadState,1000)})">🚀 FORCE REVERSE SHORT</button><button class=btn2 onclick="if(confirm('WIPE $160 to $300? REVERSE will be 91% WR!')){fetch('/api/reset').then(r=>r.json()).then(()=>{setTimeout(loadState,1000)})}">🗑️ WIPE → $300 REVERSE SHORT</button></div>
+<div class=card><b>Open SHORT <span id=oc>0/6</span> Most PUMPED to short</b><div id=open>Press FORCE</div></div>
+<div class=card><b>Closed SHORT — Reverse</b><div id=closed>Waiting...</div></div>
+<div class=card><b>Brain REVERSE</b><div id=brain class=m>Training...</div></div>
+<div class=card><b>$50/Day REVERSE</b><div id=calc class=m>Waiting...</div></div>
 <script>
-async function R(){
+async function loadState(){
  try{
- let r=await fetch('/api/state'); let j=await r.json();
- document.getElementById('cap').innerText=(j.cap||300).toFixed(2);
- document.getElementById('fee').innerText=(j.fee||0).toFixed(2);
- document.getElementById('c').innerText=j.last||'never';
- document.getElementById('k').innerText=j.kv?'YES':'NO';
- document.getElementById('pc').innerText=j.price_count||0;
- document.getElementById('oc').innerText=(j.open||[]).length+'/6';
- let wr=j.total?Math.round(j.wins/j.total*100):0;
- document.getElementById('wr').innerText=wr+'%';
- document.getElementById('st').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
- document.getElementById('o').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>🔻 SHORT ${t.symbol} WR ${t.wr||0}% Mom ${t.m||0}% 24h ${t.m24||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open';
- document.getElementById('cl').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} SHORT ${c.symbol} ${c.hold}s Mom ${c.m||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} Net $${c.net.toFixed(2)}</span></span></div>`).join('')||'No trades';
- let brEl=document.getElementById('br'); if(brEl){ let stats=Object.entries(j.stats||{}).sort((a,b)=> (b[1].profit||0)-(a[1].profit||0)); brEl.innerHTML=stats.slice(0,20).map(([k,v])=>`<div class=trade><span>${k.replace('USDT','')} ${v.w||0}W/${v.l||0}L ${Math.round(((v.w||0)/Math.max(1,(v.w||0)+(v.l||0)))*100)}% $${(v.profit||0).toFixed(2)}</span><span class=${(v.profit||0)>=0?'win':'loss'}>${(v.profit||0)>0.5?'🔥':'❌'}</span></div>`).join('')||'Scanning...'; }
- let rcEl=document.getElementById('rc'); if(rcEl){ let exp=0; if(j.total>5){ let w=j.wins/j.total; exp=w*0.25-(1-w)*0.45; } let perDay=exp*40*24; rcEl.innerHTML=`REVERSE SHORT: Short the pump! Expect mean reversion<br>Expectancy $${exp.toFixed(3)}/trade<br>~40/h → $${(exp*40).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>On $300 ${(perDay/300*100).toFixed(1)}% daily<br>Current ${wr}% → ${perDay>=50?'✅ $50/day POSSIBLE!':perDay>0?'⚠️ Profitable':'❌ Training...'}`; }
- }catch(e){ document.getElementById('o').innerText='Error: '+e.message; }
+  let r=await fetch('/api/state'); let j=await r.json();
+  let el=(id)=>document.getElementById(id);
+  if(el('cap')) el('cap').innerText=(j.cap||300).toFixed(2);
+  if(el('fee')) el('fee').innerText=(j.fee||0).toFixed(2);
+  if(el('cr')) el('cr').innerText=j.last||'never';
+  if(el('kv')) el('kv').innerText=j.kv?'YES':'NO';
+  if(el('pc')) el('pc').innerText=j.price_count||0;
+  if(el('oc')) el('oc').innerText=(j.open||[]).length+'/6';
+  let wr=j.total?Math.round(j.wins/j.total*100):0;
+  if(el('wr')) el('wr').innerText=wr+'%';
+  if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>🔻 SHORT ${t.symbol} WR ${t.wr||0}% Mom ${t.m||0}% 24h ${t.m24||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - Press FORCE';
+  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} SHORT ${c.symbol} ${c.hold}s Mom ${c.m||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} Net $${(c.net||0).toFixed(2)}</span></span></div>`).join('')||'No trades - Press FORCE';
+  if(el('brain')){ let stats=Object.entries(j.stats||{}).sort((a,b)=>(b[1].profit||0)-(a[1].profit||0)); el('brain').innerHTML=stats.slice(0,20).map(([k,v])=>`<div class=trade><span>${k.replace('USDT','')} ${v.w||0}W/${v.l||0}L ${Math.round(((v.w||0)/Math.max(1,(v.w||0)+(v.l||0)))*100)}% $${(v.profit||0).toFixed(2)}</span><span class=${(v.profit||0)>=0?'win':'loss'}>${(v.profit||0)>0.5?'🔥':'❌'}</span></div>`).join('')||'Scanning...'; }
+  if(el('calc')){ let exp=0; if(j.total>5){ let w=j.wins/j.total; exp=w*0.25-(1-w)*0.45; } let perDay=exp*40*24; el('calc').innerHTML=`REVERSE SHORT: Short the pump<br>Expectancy $${exp.toFixed(3)}/trade<br>~40/h → $${(exp*40).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>On $300 ${(perDay/300*100).toFixed(1)}% daily<br>Current ${wr}% → ${perDay>=50?'✅ $50/day POSSIBLE!':perDay>0?'⚠️ Profitable':'❌ Training...'}`; }
+ }catch(e){ let el=document.getElementById('open'); if(el) el.innerText='Load error: '+e.message; }
 }
-setInterval(R,3000);R();setInterval(()=>{fetch('/api/cron').then(()=>R());},15000);
+setInterval(loadState,3000); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},15000);
 </script></body></html>"""
