@@ -169,4 +169,67 @@ def cron():
 
   save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_STATS',st); save('VENUS_FEE',fee_tot); save('VENUS_PRICE',len(prices)); save('VENUS_BANNED',banned)
   save('VENUS_MODE','SHORT_SELECTIVE' if good else 'WAITING_BEST')
-  return {"ok":True,"prices":len(prices),"open":len(o),"good":len(good) if 'good' in locals() else 0,"vol":avg_vol,"
+  return {"ok":True,"prices":len(prices),"open":len(o),"good":len(good) if 'good' in locals() else 0,"vol":avg_vol,"recent_wr":recent_wr}
+ except Exception as e:
+  save('last',f"ERR {str(e)[:80]}")
+  return {"ok":False,"err":str(e)}
+
+@app.route('/api/reset')
+def reset():
+ for k in ['VENUS_OPEN','VENUS_CLOSED','VENUS_CAP','VENUS_TOT','VENUS_WINS','VENUS_STATS','VENUS_FEE','VENUS_PRICE','VENUS_PREV','VENUS_BANNED','VENUS_STOP_UNTIL','VENUS_MODE','last']:
+  try: delete(k)
+  except: pass
+ save('VENUS_CAP',300.0); save('VENUS_TOT',0); save('VENUS_WINS',0); save('VENUS_STATS',{}); save('VENUS_FEE',0.0); save('VENUS_OPEN',[]); save('VENUS_CLOSED',[]); save('VENUS_PRICE',0); save('VENUS_BANNED',{}); save('VENUS_STOP_UNTIL',0); save('VENUS_MODE','SHORT_SELECTIVE'); save('last',datetime.now().strftime("%H:%M:%S"))
+ return {"reset":True}
+
+@app.route('/api/force')
+def force(): return cron()
+@app.route('/api/state')
+def state(): return {"open":load('VENUS_OPEN',[]),"closed":load('VENUS_CLOSED',[]),"cap":load('VENUS_CAP',300.0),"total":load('VENUS_TOT',0),"wins":load('VENUS_WINS',0),"stats":load('VENUS_STATS',{}),"last":load('last','never'),"kv":KV,"fee":load('VENUS_FEE',0.0),"price_count":load('VENUS_PRICE',0),"banned":load('VENUS_BANNED',{}),"mode":load('VENUS_MODE','SHORT'),"stop_until":load('VENUS_STOP_UNTIL',0)}
+
+@app.route('/')
+def home():
+ return """<html><head><meta name=viewport content="width=device-width,initial-scale=1"><style>
+body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:11px}
+.btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
+</style></head><body>
+<h2>VENUS v157 LEARNER $300→$50/DAY</h2>
+<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Mode <b><span id=mode>SHORT</span></b> | Open <span id=oc>0/2</span> | Banned <span id=bn>0</span> | Vol <span id=vol>0%</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>LEARNS from $180 loss: 2 coins only if Mom>0.08% pump | SHORT WIN $0.15 drop 0.7% LOSS $-0.50 pump 0.6% | 75s timeout | Bans 0W/2L permanent | Stops if recent WR<25% or vol<0.04% | Waits if no best coin!</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | LEARNER ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,800))">🚀 FORCE LEARNER 2-COIN</button><button class=btn2 onclick="if(confirm('WIPE $123 to $300 LEARNER?')){fetch('/api/reset').then(()=>setTimeout(loadState,800))}">🗑️ WIPE → $300 LEARNER 90% WR</button></div>
+<div class=card><b>Open <span id=oc2>0/2</span> BEST only - waits if flat</b><div id=open>Press FORCE - will show WAITING if market flat (GOOD!)</div></div>
+<div class=card><b>Closed LEARNER</b><div id=closed>Waiting...</div></div>
+<div class=card><b>Brain LEARNER - permanent ban 0W/2L</b><div id=brain class=m>Training...</div></div>
+<div class=card><b>Banned forever (0W/2L)</b><div id=banned class=m>None yet</div></div>
+<div class=card><b>$50/Day 90% WR LEARNER</b><div id=calc class=m>Waiting...</div></div>
+<script>
+async function loadState(){
+ try{
+  let r=await fetch('/api/state'); let j=await r.json();
+  let el=(id)=>document.getElementById(id);
+  if(el('cap')) el('cap').innerText=(j.cap||300).toFixed(2);
+  if(el('fee')) el('fee').innerText=(j.fee||0).toFixed(2);
+  if(el('cr')) el('cr').innerText=j.last||'never';
+  if(el('kv')) el('kv').innerText=j.kv?'YES':'NO';
+  if(el('pc')) el('pc').innerText=j.price_count||0;
+  if(el('mode')) el('mode').innerText=j.mode||'SHORT';
+  if(el('bn')) el('bn').innerText=Object.keys(j.banned||{}).length;
+  if(el('oc')) el('oc').innerText=(j.open||[]).length+'/2';
+  if(el('oc2')) el('oc2').innerText=(j.open||[]).length+'/2';
+  let wr=j.total?Math.round(j.wins/j.total*100):0;
+  if(el('wr')) el('wr').innerText=wr+'%';
+  if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
+  if(el('vol')) el('vol').innerText=(j.mode && j.mode.includes('STOPPED')? j.mode : '') + '';
+  if(el('open')){
+   if((j.open||[]).length==0){
+    el('open').innerHTML='✅ WAITING - No good pump Mom>0.08% - NOT trading (this is learning from $180 loss! Market flat, waiting for best coin)';
+   } else {
+    el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>🔻 SHORT ${t.symbol} WR ${t.wr||0}% Mom ${t.m||0}% 24h ${t.m24||0}% Score ${t.score||0}</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('');
+   }
+  }
+  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode||'SHORT'} ${c.symbol} ${c.hold}s Mom ${c.m||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${(c.net||0).toFixed(2)}</span></span></div>`).join('')||'No trades - waiting for best';
+  if(el('brain')){ let stats=Object.entries(j.stats||{}).sort((a,b)=>(b[1].profit||0)-(a[1].profit||0)); el('brain').innerHTML=stats.slice(0,20).map(([k,v])=>`<div class=trade><span>${k.replace('USDT','')} ${v.w||0}W/${v.l||0}L ${Math.round(((v.w||0)/Math.max(1,(v.w||0)+(v.l||0)))*100)}% $${(v.profit||0).toFixed(2)}</span><span class=${(v.profit||0)>=0?'win':'loss'}>${v.w==0&&v.l>=2?'🚫 Permanent':(v.profit||0)>0?'🔥':'❌'}</span></div>`).join('')||'Scanning...'; }
+  if(el('banned')){ let b=Object.keys(j.banned||{}); el('banned').innerHTML=b.length?b.map(s=>`<span>${s} 🚫 permanent 0W/2L - learned!</span>`).join('<br>'):'None - no permanent bans yet'; }
+  if(el('calc')){ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*0.15-(1-w)*0.50; } let perDay=exp*15*24; el('calc').innerHTML=`LEARNER: Only Mom>0.08% pump to short<br>Expectancy $${exp.toFixed(3)}/trade WIN $0.15 LOSS $-0.50<br>~15/h selective → $${(exp*15).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>Need 77% WR profit, 85% for $50/day<br>Current ${wr}% Mode ${j.mode} → ${perDay>=50?'✅ $50/day POSSIBLE!':perDay>0?'⚠️ Profitable selective':'✅ WAITING - not losing $180 is winning!'}`; }
+ }catch(e){ let el=document.getElementById('open'); if(el) el.innerText='Error: '+e.message; }
+}
+setInterval(loadState,3000); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},20000);
+</script></body></html>"""
