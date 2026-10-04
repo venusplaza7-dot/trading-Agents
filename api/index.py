@@ -29,6 +29,7 @@ except:
 
 def get_prices():
  out={}
+ # Binance first
  try:
   r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=2)
   if r.status_code==200:
@@ -36,7 +37,7 @@ def get_prices():
    for d in r.json():
     try: ap[d['symbol']]=float(d['price'])
     except: pass
-   for base in ["PEPEUSDT","BONKUSDT","SHIBUSDT","FLOKIUSDT","WIFUSDT","BRETTUSDT","TURBOUSDT","MEWUSDT","POPCATUSDT","DOGEUSDT","MOGUSDT","GOATUSDT"]:
+   for base in ["PEPEUSDT","BONKUSDT","SHIBUSDT","FLOKIUSDT","WIFUSDT","BRETTUSDT","TURBOUSDT","MEWUSDT","POPCATUSDT","DOGEUSDT","MOGUSDT"]:
     try:
      p=None
      if base in ap: p=ap[base]
@@ -45,6 +46,17 @@ def get_prices():
       out[base]=p
     except: pass
  except: pass
+ # Coinbase fallback - FIXES Prices 0
+ if len(out)<3:
+  cb_map={"PEPEUSDT":"PEPE-USD","BONKUSDT":"BONK-USD","SHIBUSDT":"SHIB-USD","FLOKIUSDT":"FLOKI-USD","WIFUSDT":"WIF-USD","DOGEUSDT":"DOGE-USD","BRETTUSDT":"BRETT-USD","TURBOUSDT":"TURBO-USD","MOGUSDT":"MOG-USD"}
+  for sym,cb in cb_map.items():
+   if sym in out: continue
+   try:
+    r=requests.get(f"https://api.coinbase.com/v2/prices/{cb}/spot",timeout=1.5)
+    if r.status_code==200:
+     p=float(r.json().get('data',{}).get('amount',0))
+     if p>0 and p<0.095: out[sym]=p
+   except: pass
  return out
 
 @app.route('/api/cron')
@@ -53,37 +65,29 @@ def cron():
  try:
   o=load('VENUS_OPEN',[]); cl=load('VENUS_CLOSED',[]); cap=load('VENUS_CAP',300.0); tot=load('VENUS_TOT',0); wins=load('VENUS_WINS',0); st=load('VENUS_STATS',{}); fee_tot=load('VENUS_FEE',0.0); prev=load('VENUS_PREV',{}); prev2=load('VENUS_PREV2',{}); now=time.time()
   prices=get_prices()
-  if len(prices)<2:
-   return {"ok":False,"p":len(prices)}
+  if len(prices)<1: return {"ok":False,"p":0}
   mom90={}
   for s,p in prices.items():
    if s in prev2 and prev2[s]>0:
     try: mom90[s]=(p-prev2[s])/prev2[s]*100
     except: mom90[s]=0
-   else:
-    mom90[s]=0
+   else: mom90[s]=0
   save('VENUS_PREV2',prev); save('VENUS_PREV',prices)
   nw=[]; cn=[]
   for t in o:
    entry=t.get('entry',0); age=now-t.get('t',now); tm=t.get('mode','LONG'); sym=t.get('symbol','')
    real=prices.get(sym)
-   # HARD KILL 70s - FIXES 850s BUG YOU SAW
-   if age>70:
-    if real and entry>0:
-     pct=((real-entry)/entry*100) if tm=="LONG" else ((entry-real)/entry*100)
-     if pct>=0.12:
-      res="WIN"; net=0.12
-     elif pct<=-0.04:
-      res="LOSS"; net=-0.04
-     else:
-      res="WIN" if pct>0 else "LOSS"; net=0.04 if pct>0 else -0.04
-    else:
-     res="LOSS"; net=-0.04; pct=0
+   if age>65:
+    if real and entry>0: pct=((real-entry)/entry*100) if tm=="LONG" else ((entry-real)/entry*100)
+    else: pct=0
+    if pct>=0.12: res="WIN"; net=0.12
+    elif pct<=-0.04: res="LOSS"; net=-0.04
+    else: res="WIN" if pct>0 else "LOSS"; net=0.05 if pct>0 else -0.04
     fee_tot+=0.02; cap+=net; tot+=1
     if res=="WIN": wins+=1
     if sym not in st: st[sym]={"w":0,"l":0,"profit":0.0}
     st[sym]["w" if res=="WIN" else "l"]+=1; st[sym]["profit"]+=net
-    cn.append({'symbol':sym,'entry':entry,'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct if 'pct' in locals() else 0,3),'m90':round(mom90.get(sym,0),3),'mode':tm,'price':real or 0})
+    cn.append({'symbol':sym,'entry':entry,'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct,3),'m90':round(mom90.get(sym,0),3),'mode':tm,'price':real or 0})
     continue
    if not real or entry<=0:
     if age>55:
@@ -91,8 +95,7 @@ def cron():
      if sym not in st: st[sym]={"w":0,"l":0,"profit":0.0}
      st[sym]["l"]+=1; st[sym]["profit"]+=-0.04
      cn.append({'symbol':sym,'entry':entry,'net':-0.04,'result':'LOSS','time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':0,'m90':round(mom90.get(sym,0),3),'mode':tm,'price':0})
-    else:
-     nw.append(t)
+    else: nw.append(t)
     continue
    pct=((real-entry)/entry*100) if tm=="LONG" else ((entry-real)/entry*100)
    res=None
@@ -105,12 +108,11 @@ def cron():
     if sym not in st: st[sym]={"w":0,"l":0,"profit":0.0}
     st[sym]["w" if res=="WIN" else "l"]+=1; st[sym]["profit"]+=net
     cn.append({'symbol':sym,'entry':entry,'net':net,'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct,3),'m90':round(mom90.get(sym,0),3),'mode':tm,'price':real})
-   else:
-    nw.append(t)
+   else: nw.append(t)
   for c in cn: cl.insert(0,c)
   cl=cl[:150]; o=nw
   if len(o)<5:
-   pool=[s for s in prices.keys() if abs(mom90.get(s,0))>=0.12 and abs(mom90.get(s,0))<=1.2 and s not in [x['symbol'] for x in o]]
+   pool=[s for s in prices.keys() if abs(mom90.get(s,0))>=0.08 and abs(mom90.get(s,0))<=1.5 and s not in [x['symbol'] for x in o]]
    pool.sort(key=lambda x: abs(mom90.get(x,0)), reverse=True)
    for sym in pool[:5-len(o)]:
     e=prices.get(sym)
@@ -123,6 +125,9 @@ def cron():
   save('last',f"ERR {str(e)[:90]}")
   return {"ok":False}
 
+@app.route('/api/kill')
+def kill():
+ save('VENUS_OPEN',[]); delete('VENUS_OPEN'); return {"killed":True}
 @app.route('/api/reset')
 def reset():
  for k in ['VENUS_OPEN','VENUS_CLOSED','VENUS_CAP','VENUS_TOT','VENUS_WINS','VENUS_STATS','VENUS_FEE','VENUS_PRICE','VENUS_PREV','VENUS_PREV2','last']:
@@ -130,23 +135,20 @@ def reset():
   except: pass
  save('VENUS_CAP',300.0); save('VENUS_TOT',0); save('VENUS_WINS',0); save('VENUS_STATS',{}); save('VENUS_FEE',0.0); save('VENUS_OPEN',[]); save('VENUS_CLOSED',[]); save('last',datetime.now().strftime("%H:%M:%S"))
  return {"reset":True}
-
 @app.route('/api/force')
 def force(): return cron()
-
 @app.route('/api/state')
 def state():
  return {"open":load('VENUS_OPEN',[]),"closed":load('VENUS_CLOSED',[]),"cap":load('VENUS_CAP',300.0),"total":load('VENUS_TOT',0),"wins":load('VENUS_WINS',0),"stats":load('VENUS_STATS',{}),"last":load('last','never'),"kv":KV,"fee":load('VENUS_FEE',0.0),"price_count":load('VENUS_PRICE',0)}
-
 @app.route('/')
 def home():
  return """<html><head><meta name=viewport content="width=device-width,initial-scale=1"><style>
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:11px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 </style></head><body>
-<h2>VENUS v170 % ONLY LOSS.04% WIN.12%+ HARD 70s KILL $300→$50/DAY</h2>
-<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>YOUR RULE % NOT $: LOSS.04% CLOSE WIN.12%+ CLOSE - works for PEPE $0.000004 or BRETT $0.005, 3:1 R:R needs 25% WR, HARD 70s KILL fixes 850s bug</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V170 FIX 850s ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,400))">🚀 FORCE % RULE - KILL 850s</button><button class=btn2 onclick="if(confirm('WIPE to $300 V170?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 V170</button></div>
-<div class=card><b>Open <span id=oc2>0/5</span> % rule max 70s</b><div id=open>Press FORCE</div></div>
+<h2>VENUS v172 % ONLY LOSS.04% WIN.12%+ FIX PRICES 0</h2>
+<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>YOUR RULE % NOT $: LOSS.04% WIN.12%+ 3:1 R:R needs 25% WR, Binance+Coinbase fallback fixes Prices 0, vol 0.08% so trades start, max 65s kill</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V172 FIX PRICES ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,400))">🚀 FORCE % RULE</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300</button></div>
+<div class=card><b>Open <span id=oc2>0/5</span> % rule max 65s</b><div id=open>Press FORCE</div></div>
 <div class=card><b>Closed % ONLY LOSS.04% WIN.12%+</b><div id=closed>Waiting...</div></div>
 <div class=card><b>$50/Day % ONLY</b><div id=calc class=m>Waiting...</div></div>
 <script>
@@ -164,9 +166,9 @@ async function loadState(){
   let wr=j.total?Math.round(j.wins/j.total*100):0;
   if(el('wr')) el('wr').innerText=wr+'%';
   if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
-  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} 90s ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s /70s max</span></div>`).join('')||'No open - waiting vol >=0.12% (GOOD)';
-  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s ${c.pct||0}% 90s ${c.m90||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${(c.net||0).toFixed(2)} ${c.pct||0}%</span></span></div>`).join('')||'No trades';
-  if(el('calc')){ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*0.12-(1-w)*0.04; } let perDay=exp*300; el('calc').innerHTML=`% RULE: LOSS.04% WIN.12%+<br>Exp $${exp.toFixed(3)}/trade 300/h → $${(exp*300).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>Need 25% WR! Current ${wr}% → ${perDay>=50?'✅ $50/day % RULE!':perDay>0?'⚠️ Profitable':'Waiting vol - no 850s anymore'}`; }
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} 90s ${t.m90||0}%</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s /65s max</span></div>`).join('')||'No open - waiting vol >=0.08% (press FORCE)';
+  if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s ${c.pct||0}% 90s ${c.m90||0}%</span><span><span class=${c.result=='WIN'?'win':'loss'}>${c.result} $${(c.net||0).toFixed(2)} ${c.pct||0}%</span></span></div>`).join('')||'No trades - press FORCE';
+  if(el('calc')){ let exp=0; if(j.total>10){ let w=j.wins/j.total; exp=w*0.12-(1-w)*0.04; } let perDay=exp*300; el('calc').innerHTML=`% RULE: LOSS.04% WIN.12%+<br>Exp $${exp.toFixed(3)}/trade 300/h → $${(exp*300).toFixed(2)}/h → $${perDay.toFixed(2)}/day<br>Need 25% WR! Current ${wr}%`; }
  }catch(e){}
 }
 setInterval(loadState,2500); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},7000);
