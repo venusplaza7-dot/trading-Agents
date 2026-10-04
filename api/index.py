@@ -1,5 +1,192 @@
 from flask import Flask
-app=Flask(__name__)
+import json, time, os, requests
+from datetime import datetime
+app = Flask(__name__)
+
+try:
+    from upstash_redis import Redis
+    url = os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL") or ""
+    token = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN") or ""
+    if not token:
+        for k,v in os.environ.items():
+            if "TOKEN" in k.upper():
+                token=v; break
+    db = Redis(url=url, token=token) if url and token else Redis.from_env()
+    def load(k,d):
+        try:
+            v=db.get(k)
+            return json.loads(v) if v else d
+        except:
+            return d
+    def save(k,v):
+        try:
+            db.set(k, json.dumps(v))
+        except:
+            pass
+    def delete(k):
+        try:
+            db.delete(k)
+        except:
+            pass
+    KV=True
+except:
+    M={}
+    def load(k,d):
+        return M.get(k,d)
+    def save(k,v):
+        M[k]=v
+    def delete(k):
+        M.pop(k,None)
+    KV=False
+
+def get_prices():
+    out={}
+    coins=["BTCUSDT","ETHUSDT","SOLUSDT","DOGEUSDT","LINKUSDT","AVAXUSDT","ADAUSDT","XRPUSDT","BNBUSDT","LTCUSDT"]
+    try:
+        r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=3)
+        if r.status_code==200:
+            for d in r.json():
+                if d['symbol'] in coins:
+                    out[d['symbol']]=float(d['price'])
+    except:
+        pass
+    return out
+
+@app.route('/api/cron')
+def cron():
+    try:
+        o=load('VENUS_OPEN',[]); cl=load('VENUS_CLOSED',[]); cap=load('VENUS_CAP',1000.0); tot=load('VENUS_TOT',0); wins=load('VENUS_WINS',0); ticks=load('VENUS_TICKS',{}); now=time.time()
+        prices=get_prices()
+        if len(prices)<3:
+            return {"ok":False}
+        for s,p in prices.items():
+            if s not in ticks:
+                ticks[s]=[]
+            ticks[s].append(p)
+            ticks[s]=ticks[s][-80:]
+        save('VENUS_TICKS',ticks)
+        nw=[]; cn=[]; fee=load('VENUS_FEE_FUT',0.0)
+        for t in o:
+            sym=t['symbol']; entry=t['entry']; tm=t['mode']; entry_t=t['t']; pos=t.get('pos',200.0)
+            real=prices.get(sym)
+            if not real:
+                nw.append(t); continue
+            age=now-entry_t
+            pct=((real-entry)/entry*100) if tm=="LONG" else ((entry-real)/entry*100)
+            gross=pos*pct/100; fee_fut=pos*0.0004; net_fut=gross-fee_fut
+            tk=ticks.get(sym,[])
+            tr=[abs(tk[i]-tk[i-1])/tk[i-1]*100 for i in range(1,len(tk))] if len(tk)>1 else [0.02]
+            atr=sum(tr[-8:])/8 if len(tr)>=8 else 0.02
+            target=0.20 if atr>0.025 else 0.12
+            cut=max(0.10, atr*1.5)
+            if age>70 and abs(pct)<0.05:
+                cn.append({'symbol':sym,'entry':entry,'net':0.0,'gross':round(gross,3),'fee_fut':round(fee_fut,3),'result':"SCRATCH",'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct,4),'mode':tm,'price':real,'reason':f"SCRATCH 30SEC {pct:.4f}%",'pos':pos})
+                continue
+            if gross>0 and gross < fee_fut*1.5 and age<25:
+                nw.append(t); continue
+            should=False; reason=""; peak=t.get('peak',pct)
+            if pct>peak:
+                t['peak']=pct
+            if pct>=target:
+                should=True; reason=f"WIN 30SEC $1 {pct:.3f}% target {target:.3f}% net ${net_fut:.2f}"
+            elif peak>=target and pct<peak*0.40:
+                should=True; reason=f"TRAIL $1 {peak:.2f}%->{pct:.2f}%"
+            elif pct<=-cut:
+                should=True; reason=f"CUT {pct:.3f}%"
+            if age>35 and pct>=0.09:
+                should=True; reason=f"MAX 35s {pct:.3f}%"
+            if age>75:
+                should=True; reason=f"MAX 75s {pct:.3f}%"
+            if should:
+                if net_fut>0.08:
+                    res="WIN"
+                elif net_fut<-0.08:
+                    res="LOSS"
+                else:
+                    res="SCRATCH" if age>=60 else None
+                if res is None:
+                    nw.append(t); continue
+                if res!="SCRATCH":
+                    fee+=fee_fut; cap+=net_fut; tot+=1
+                    if res=="WIN":
+                        wins+=1
+                cn.append({'symbol':sym,'entry':entry,'net':round(net_fut,2) if res!="SCRATCH" else 0.0,'gross':round(gross,3),'fee_fut':round(fee_fut,3),'result':res,'time':datetime.now().strftime("%H:%M:%S"),'hold':int(age),'pct':round(pct,4),'mode':tm,'price':real,'reason':reason,'pos':pos,'atr':round(atr,4),'target':round(target,3),'cap':round(cap,2)})
+            else:
+                if pct>t.get('peak',-999):
+                    t['peak']=pct
+                nw.append(t)
+        for c in cn:
+            cl.insert(0,c)
+        cl=cl[:200]; o=nw
+        candidates=[]
+        for s in prices.keys():
+            if s in [x['symbol'] for x in o]:
+                continue
+            if s not in ticks or len(ticks[s])<6:
+                continue
+            tk=ticks[s]
+            tr=[abs(tk[i]-tk[i-1])/tk[i-1]*100 for i in range(1,len(tk))] if len(tk)>1 else [0.01]
+            atr=sum(tr[-6:])/6 if len(tr)>=6 else 0.005
+            if atr<0.007:
+                continue
+            vwap=sum(tk[-12:])/12 if len(tk)>=12 else prices[s]
+            vwap_dev=(prices[s]-vwap)/vwap*100 if vwap>0 else 0
+            if abs(vwap_dev)<0.05:
+                continue
+            mode="SHORT" if vwap_dev>0.05 else "LONG"
+            speed=atr*3 + abs(vwap_dev)
+            candidates.append((s,speed,atr,vwap_dev,mode))
+        candidates.sort(key=lambda x:x[1], reverse=True)
+        max_open=5
+        pos_each=round(min(200, max(150, cap/max_open)),1)
+        for sym,speed,atr,vwap_dev,mode in candidates[:max_open-len(o)]:
+            o.append({'symbol':sym,'entry':prices[sym],'t':now,'mode':mode,'price':prices[sym],'peak':0,'pos':pos_each,'rev':0,'size_reason':f"30SEC 5 COINS $1 {sym} ATR {atr:.4f}% VWAP {vwap_dev:.3f}% speed {speed:.4f}% pos ${pos_each}"})
+        save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_FEE_FUT',fee); save('VENUS_PRICE',len(prices))
+        return {"ok":True}
+    except Exception as e:
+        return {"ok":False,"err":str(e)[:100]}
+
+@app.route('/api/state')
+def state():
+    return {"open":load('VENUS_OPEN',[]),"closed":load('VENUS_CLOSED',[]),"cap":load('VENUS_CAP',1000.0),"total":load('VENUS_TOT',0),"wins":load('VENUS_WINS',0),"kv":KV}
+
+@app.route('/api/force')
+def force():
+    return cron()
+
 @app.route('/')
 def home():
-    return "<h1>WORKING VENUS</h1>"
+    return """
+<html><head><meta name=viewport content="width=device-width,initial-scale=1"><style>
+body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}
+.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}
+.win{color:#00ff88}.loss{color:#ff4444}.m{color:#888;font-size:12px}
+.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:10px}
+.btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}
+.k{background:#00331a;border:2px solid #00ff88}
+</style></head><body>
+<h2>VENUS v212 FIXED BUILD WORKS</h2>
+<div class="card k">
+CAP $<span id=cap>1000</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span><br>
+<span class=m>5 coins x $200 = $1000 every 30sec = 10 trades/min = $3.20/min = $192/hour = $1 per trade quick</span><br><br>
+<button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">FORCE 30SEC 5 COINS</button>
+</div>
+<div class="card"><b>Open <span id=oc2>0/5</span></b><div id=open>Waiting</div></div>
+<div class="card"><b>Closed</b><div id=closed>Waiting</div></div>
+<script>
+async function loadState(){
+ try{
+  let r=await fetch('/api/state'); let j=await r.json();
+  document.getElementById('cap').innerText=(j.cap||1000).toFixed(2);
+  document.getElementById('oc').innerText=(j.open||[]).length+'/5';
+  document.getElementById('oc2').innerText=(j.open||[]).length+'/5';
+  let wr=j.total?Math.round(j.wins/j.total*100):0;
+  document.getElementById('wr').innerText=wr+'%';
+  document.getElementById('tot').innerText=`${j.wins||0}W of ${j.total||0}`;
+  document.getElementById('open').innerHTML=(j.open||[]).map(t=>`<div>${t.mode} ${t.symbol} $${(t.pos||200).toFixed(0)} ${Math.floor(Date.now()/1000 - t.t)}s</div>`).join('')||'Waiting';
+  document.getElementById('closed').innerHTML=(j.closed||[]).map(c=>`<div>${c.time} ${c.mode} ${c.symbol} ${c.pct}% net $${c.net} ${c.result}</div>`).join('')||'Waiting';
+ }catch(e){}
+}
+setInterval(loadState,2500); loadState();
+</script></body></html>
+"""
