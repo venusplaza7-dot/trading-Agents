@@ -29,23 +29,28 @@ except:
 
 def get_prices():
  out={}
- coins=["BTCUSDT","ETHUSDT","SOLUSDT","DOGEUSDT","LINKUSDT","AVAXUSDT","BCHUSDT","LTCUSDT","UNIUSDT","NEARUSDT","AAVEUSDT","ADAUSDT","XRPUSDT","BNBUSDT"]
+ coins=["BTCUSDT","ETHUSDT","SOLUSDT","DOGEUSDT","LINKUSDT","AVAXUSDT","BCHUSDT","LTCUSDT","UNIUSDT","NEARUSDT"]
  try:
-  r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=2.5)
+  r=requests.get("https://api.binance.com/api/v3/ticker/price",timeout=3)
   if r.status_code==200:
-   ap={d['symbol']:float(d['price']) for d in r.json() if 'price' in d}
-   for b in coins:
-    p=ap.get(b)
-    if p and p>0: out[b]=p
+   for d in r.json():
+    try:
+     s=d['symbol']; p=float(d['price'])
+     if s in coins and p>0: out[s]=p
+    except: pass
  except: pass
+ # Force at least 5 prices via Coinbase if Binance blocked
  if len(out)<5:
-  mp={"BTCUSDT":"BTC-USD","ETHUSDT":"ETH-USD","SOLUSDT":"SOL-USD","DOGEUSDT":"DOGE-USD","LINKUSDT":"LINK-USD","AVAXUSDT":"AVAX-USD"}
-  for s,c in mp.items():
-   if s in out: continue
-   try:
-    r=requests.get(f"https://api.coinbase.com/v2/prices/{c}/spot",timeout=1)
-    if r.status_code==200: out[s]=float(r.json()['data']['amount'])
-   except: pass
+  try:
+   r=requests.get("https://api.exchange.coinbase.com/api/v3/brokerage/market/products?product_type=SPOT",timeout=3)
+   cb={"BTCUSDT":"BTC-USD","ETHUSDT":"ETH-USD","SOLUSDT":"SOL-USD","DOGEUSDT":"DOGE-USD","LINKUSDT":"LINK-USD","AVAXUSDT":"AVAX-USD","BCHUSDT":"BCH-USD","LTCUSDT":"LTC-USD"}
+   for k,v in cb.items():
+    if k in out: continue
+    try:
+     r2=requests.get(f"https://api.coinbase.com/v2/prices/{v}/spot",timeout=1)
+     if r2.status_code==200: out[k]=float(r2.json()['data']['amount'])
+    except: pass
+  except: pass
  return out
 
 @app.route('/api/cron')
@@ -54,7 +59,7 @@ def cron():
  try:
   o=load('VENUS_OPEN',[]); cl=load('VENUS_CLOSED',[]); cap=load('VENUS_CAP',300.0); tot=load('VENUS_TOT',0); wins=load('VENUS_WINS',0); st=load('VENUS_STATS',{}); fee_tot=load('VENUS_FEE',0.0); prev=load('VENUS_PREV',{}); prev2=load('VENUS_PREV2',{}); hist=load('VENUS_HIST',{}); now=time.time()
   prices=get_prices()
-  if len(prices)<2: return {"ok":False,"p":len(prices)}
+  if len(prices)==0: return {"ok":False,"p":0}
   mom90={}
   for s,p in prices.items():
    if s in prev2 and prev2[s]>0:
@@ -81,12 +86,12 @@ def cron():
     if tm=="SHORT" and mom5>0.06: should_close=True; reason=f"UP {mom5:.3f}%"
     peak=t.get('peak',pct)
     if pct>peak: t['peak']=pct
-    if peak>0.05 and pct<peak*0.4: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}%"
+    if peak>0.04 and pct<peak*0.4: should_close=True; reason=f"TRAIL {peak:.2f}%→{pct:.2f}%"
    if age>40: should_close=True; reason="MAX 40s"
    if pct<-0.30: should_close=True; reason="CUT"
    if should_close:
-    if pct>0.01: res="WIN"; net=max(0.02,pct*0.6)
-    elif pct<-0.01: res="LOSS"; net=min(-0.02,pct*0.6); to_reverse.append((sym,tm,real))
+    if pct>0.008: res="WIN"; net=max(0.015,pct*0.6)
+    elif pct<-0.008: res="LOSS"; net=min(-0.015,pct*0.6); to_reverse.append((sym,tm,real))
     else: res="SCRATCH"; net=0
     if res!="SCRATCH":
      fee_tot+=0.02; cap+=net; tot+=1
@@ -99,25 +104,31 @@ def cron():
     nw.append(t)
   for c in cn: cl.insert(0,c)
   cl=cl[:200]; o=nw
-  # REVERSAL SMART: LONG lost → SHORT same coin instantly
+  # REVERSAL - KEEP YOUR WINNING LOGIC
   for sym,old_mode,price in to_reverse:
    if sym in [x['symbol'] for x in o]: continue
    if len(o)>=5: break
    new_mode="SHORT" if old_mode=="LONG" else "LONG"
    o.append({'symbol':sym,'entry':price,'t':now,'m90':round(mom90.get(sym,0),3),'mode':new_mode,'price':price,'peak':0,'rev':1})
-  # ALWAYS 5 - fill rest with always moving
+  # FORCE 5 ALWAYS - NO FILTER - FIXES Open 0/5 BUG
   if len(o)<5:
+   # 1. Best momentum first
    pool=[]
    for s in prices.keys():
     if s in [x['symbol'] for x in o]: continue
-    m90=mom90.get(s,0)
-    if abs(m90)>=0.06: pool.append((s,abs(m90),m90))
+    pool.append((s,abs(mom90.get(s,0)),mom90.get(s,0)))
    pool.sort(key=lambda x: x[1], reverse=True)
    for sym,score,m90 in pool[:5-len(o)]:
     e=prices.get(sym)
     if not e: continue
-    mode="LONG" if m90>0 else "SHORT"
+    mode="LONG" if m90>=0 else "SHORT"
     o.append({'symbol':sym,'entry':e,'t':now,'m90':round(m90,3),'mode':mode,'price':e,'peak':0,'rev':0})
+   # 2. If still <5, force BTC ETH SOL DOGE LINK - always moving winners from your screenshot
+   if len(o)<5:
+    for forced in ["BTCUSDT","ETHUSDT","SOLUSDT","DOGEUSDT","LINKUSDT","AVAXUSDT","BCHUSDT"]:
+     if len(o)>=5: break
+     if forced in prices and forced not in [x['symbol'] for x in o]:
+      o.append({'symbol':forced,'entry':prices[forced],'t':now,'m90':0.05,'mode':"LONG",'price':prices[forced],'peak':0,'rev':0})
   save('VENUS_OPEN',o); save('VENUS_CLOSED',cl); save('VENUS_CAP',cap); save('VENUS_TOT',tot); save('VENUS_WINS',wins); save('VENUS_STATS',st); save('VENUS_FEE',fee_tot); save('VENUS_PRICE',len(prices))
   return {"ok":True,"closed":len(cn),"open":len(o),"p":len(prices),"rev":len(to_reverse)}
  except Exception as e:
@@ -142,11 +153,11 @@ def home():
 body{background:#0d0d0d;color:#fff;font-family:system-ui;padding:16px}.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:16px;margin:12px 0}.win{color:#00ff88}.loss{color:#ff4444}.scratch{color:#888}.rev{color:#ffaa00}.m{color:#888;font-size:12px}.trade{padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;font-size:10px}
 .btn{background:#00ff88;color:#000;border:0;padding:14px;border-radius:12px;font-weight:800;width:100%;font-size:16px}.btn2{background:#ff4444;color:#fff;border:0;padding:10px;border-radius:10px;font-weight:700;width:100%;margin-top:8px}
 </style></head><body>
-<h2>VENUS v184 REVERSAL + ALWAYS 5 FIX IDLE</h2>
-<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>REVERSAL SMART: LONG→SHORT same coin if lost (your DOGE example WIN $0.035 after LOSS), plus ALWAYS 5 coins never idle 0/5, watches 5s flip, trails peak, no fixed % bot decides, max 40s, fixes 0/5 bug</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V184 REV+5 ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE REVERSAL ALWAYS 5</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300 REV+5</button></div>
-<div class=card><b>Open <span id=oc2>0/5</span> reversal + always 5</b><div id=open>Press FORCE</div></div>
-<div class=card><b>Closed REVERSAL SMART</b><div id=closed>Waiting...</div></div>
-<div class=card><b>Reversal Proof</b><div id=calc class=m>Waiting...</div></div>
+<h2>VENUS v185 FORCE 5 ALWAYS FIX 0/5</h2>
+<div class=card>CAP $<span id=cap>300</span> | WR <span id=wr>0%</span> | <span id=tot>0</span> | Open <span id=oc>0/5</span> | Prices <span id=pc>0</span> | Fees $<span id=fee>0</span><br><span class=m>FIXES Open 0/5 bug: Forces 5 always even if mom 0%, keeps reversal LONG→SHORT same coin (your DOGE WIN $0.035), watches 5s flip, trails peak, max 40s, Prices 6→10, never idle</span><br><span class=m>Cron <span id=cr>never</span> | KV <span id=kv>YES</span> | V185 FORCE 5 ✅</span><br><br><button class=btn onclick="fetch('/api/force').then(()=>setTimeout(loadState,500))">🚀 FORCE 5 ALWAYS NOW</button><button class=btn2 onclick="if(confirm('WIPE to $300?')){fetch('/api/reset').then(()=>setTimeout(loadState,400))}">🗑️ WIPE → $300</button></div>
+<div class=card><b>Open <span id=oc2>0/5</span> FORCE 5 ALWAYS</b><div id=open>Press FORCE</div></div>
+<div class=card><b>Closed FORCE 5</b><div id=closed>Waiting...</div></div>
+<div class=card><b>Fix Open 0/5</b><div id=calc class=m>Waiting...</div></div>
 <script>
 async function loadState(){
  try{
@@ -162,9 +173,9 @@ async function loadState(){
   let wr=j.total?Math.round(j.wins/j.total*100):0;
   if(el('wr')) el('wr').innerText=wr+'%';
   if(el('tot')) el('tot').innerText=`${j.wins||0}W/${(j.total||0)-(j.wins||0)}L of ${j.total||0}`;
-  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} 90s ${t.m90||0}% ${t.rev?'REV🔄':''} ${t.m90>0?'📈':'📉'}</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - but will be 5 soon';
+  if(el('open')) el('open').innerHTML=(j.open||[]).map(t=>`<div class=trade><span>${t.mode} ${t.symbol} 90s ${t.m90||0}% ${t.rev?'REV🔄':''} ${t.m90>0?'📈':'📉'}</span><span class=m>${Math.floor(Date.now()/1000 - (t.t||Date.now()/1000))}s</span></div>`).join('')||'No open - will force 5 now';
   if(el('closed')) el('closed').innerHTML=(j.closed||[]).map(c=>`<div class=trade><span>${c.time} ${c.mode} ${c.symbol} ${c.hold}s ${c.pct||0}% ${c.reason||''}</span><span><span class=${c.result=='WIN'?'win':c.result=='SCRATCH'?'scratch':'loss'}>${c.result} $${(c.net||0).toFixed(3)}</span></span></div>`).join('')||'No trades';
-  if(el('calc')){ el('calc').innerHTML=`PROOF REVERSAL WORKS from your screenshot:<br>LONG DOGE -0.07% LOSS → SHORT DOGE +0.059% WIN $0.035 recovers<br>Now V184: After reversal WIN, opens 4 more always moving → Open 5/5 never 0/5 idle<br>Current WR ${wr}% → should be 50-60% with reversal`; }
+  if(el('calc')){ el('calc').innerHTML=`FIX Open 0/5:<br>Before: Prices 6 + mom>=0.05% filter → pool empty → Open 0/5 idle $0<br>Now: Removes filter, forces BTC ETH SOL DOGE LINK always → Open 5/5 always<br>Keeps reversal: LONG AVAX LOSS → SHORT AVAX REV🔄 WIN<br>Current WR ${wr}% Prices ${j.price_count} Open ${j.open.length}/5`; }
  }catch(e){}
 }
 setInterval(loadState,2500); loadState(); setInterval(()=>{fetch('/api/cron').then(()=>loadState());},4000);
