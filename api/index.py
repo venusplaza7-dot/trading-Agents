@@ -5,11 +5,11 @@ import hmac, hashlib
 
 app = Flask(__name__)
 
-API_KEY = os.environ.get("BINANCE_API_KEY", "")
-SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY", "")
+API_KEY = os.environ.get("BINANCE_API_KEY", "YOUR_BINANCE_API_KEY")
+SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY", "YOUR_BINANCE_SECRET_KEY")
 
 def get_live_usdt_balance(default_fallback=34.62):
-    if not API_KEY or not SECRET_KEY:
+    if not API_KEY or "YOUR_" in API_KEY or not SECRET_KEY:
         return default_fallback
     try:
         query_string = f"timestamp={int(time.time()*1000)}"
@@ -28,7 +28,7 @@ def get_live_usdt_balance(default_fallback=34.62):
     return default_fallback
 
 def execute_binance_spot_buy(symbol, quote_amount_usdt):
-    if not API_KEY or not SECRET_KEY:
+    if not API_KEY or "YOUR_" in API_KEY or not SECRET_KEY:
         return False, "Missing API Keys"
     try:
         price_url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}USDT"
@@ -61,7 +61,7 @@ def execute_binance_spot_buy(symbol, quote_amount_usdt):
         return False, str(e)
 
 def execute_binance_spot_sell(symbol, base_quantity):
-    if not API_KEY or not SECRET_KEY:
+    if not API_KEY or "YOUR_" in API_KEY or not SECRET_KEY:
         return False, "Missing API Keys"
     try:
         timestamp = int(time.time() * 1000)
